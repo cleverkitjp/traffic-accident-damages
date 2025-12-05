@@ -16,15 +16,15 @@ const gradeLossPreset = {
   "12": { rate: 14, years: 10 },
   "11": { rate: 20, years: 15 },
   "10": { rate: 27, years: 17 },
-  "9":  { rate: 35, years: 20 },
-  "8":  { rate: 45, years: 22 },
-  "7":  { rate: 56, years: 27 },
-  "6":  { rate: 67, years: 30 },
-  "5":  { rate: 79, years: 32 },
-  "4":  { rate: 79, years: 34 },
-  "3":  { rate: 100, years: 35 },
-  "2":  { rate: 100, years: 40 },
-  "1":  { rate: 100, years: 45 }
+  "9": { rate: 35, years: 20 },
+  "8": { rate: 45, years: 22 },
+  "7": { rate: 56, years: 27 },
+  "6": { rate: 67, years: 30 },
+  "5": { rate: 79, years: 32 },
+  "4": { rate: 79, years: 34 },
+  "3": { rate: 100, years: 35 },
+  "2": { rate: 100, years: 40 },
+  "1": { rate: 100, years: 45 }
 };
 
 // 自賠責の後遺障害慰謝料（モデル値）
@@ -77,6 +77,10 @@ const courtInjuryBaseTable = {
 let lastInputs = null;
 let lastResult = null;
 
+// シナリオA/B（現在の計算結果をスナップショット保存）
+let scenarioA = null;
+let scenarioB = null;
+
 document.addEventListener("DOMContentLoaded", () => {
   const gradeEl = document.getElementById("grade");
   const lossRateEl = document.getElementById("lossRate");
@@ -92,6 +96,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const copySummaryStatus = document.getElementById("copySummaryStatus");
   const delayTodayButton = document.getElementById("delayTodayButton");
   const delayCalcButton = document.getElementById("delayCalcButton");
+  const delayCalcStatus = document.getElementById("delayCalcStatus");
+  const saveScenarioAButton = document.getElementById("saveScenarioA");
+  const saveScenarioBButton = document.getElementById("saveScenarioB");
+  const showScenarioButton = document.getElementById("showScenario");
+  const scenarioStatus = document.getElementById("scenarioStatus");
 
   // 等級変更時に喪失率・期間を自動設定
   gradeEl.addEventListener("change", () => {
@@ -134,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (errors.length === 0) {
       const result = calculateAll(inputs);
-      // グローバルに保存（サマリー・遅延損害金用）
+      // グローバルに保存（サマリー・遅延損害金・シナリオ用）
       lastInputs = inputs;
       lastResult = result;
       // localStorage に保存
@@ -172,7 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fallbackCopyText(text);
         copySummaryStatus.textContent = "サマリーを選択状態にしました。必要に応じてコピーしてください。";
       }
-    } catch (e) {
+    } catch (_e) {
       copySummaryStatus.textContent = "コピーに失敗しました。環境によっては対応していない場合があります。";
     }
   });
@@ -191,6 +200,12 @@ document.addEventListener("DOMContentLoaded", () => {
   delayCalcButton.addEventListener("click", () => {
     const delayErrorBox = document.getElementById("delayError");
     const delayResult = document.getElementById("delayResult");
+
+    // クリックされたことを即座に表示
+    if (delayCalcStatus) {
+      delayCalcStatus.textContent = "遅延損害金の計算を実行中です…";
+    }
+
     delayErrorBox.style.display = "none";
     delayErrorBox.textContent = "";
     delayResult.textContent = "";
@@ -217,6 +232,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (errors.length > 0) {
       delayErrorBox.style.display = "block";
       delayErrorBox.innerHTML = errors.map((e) => `<div>・${e}</div>`).join("");
+      if (delayCalcStatus) {
+        delayCalcStatus.textContent = "入力エラーのため、遅延損害金を計算できませんでした。";
+      }
       return;
     }
 
@@ -224,12 +242,59 @@ document.addEventListener("DOMContentLoaded", () => {
     if (diff.error) {
       delayErrorBox.style.display = "block";
       delayErrorBox.innerHTML = `<div>・${diff.error}</div>`;
+      if (delayCalcStatus) {
+        delayCalcStatus.textContent = "エラーにより、遅延損害金を計算できませんでした。";
+      }
       return;
     }
 
     delayResult.textContent =
       `事故日から支払日までの経過日数は約 ${diff.days} 日、年利${rate.toFixed(1)}％での遅延損害金は概ね `
       + `${yenFormatter.format(diff.amount)} 程度です。`;
+
+    if (delayCalcStatus) {
+      delayCalcStatus.textContent = "遅延損害金の計算が完了しました。";
+    }
+  });
+
+  // シナリオAとして保存
+  saveScenarioAButton.addEventListener("click", () => {
+    scenarioStatus.textContent = "";
+    if (!lastInputs || !lastResult) {
+      scenarioStatus.textContent = "先に「損害額を計算する」を実行してからシナリオAを保存してください。";
+      return;
+    }
+    scenarioA = {
+      inputs: structuredCloneSafe(lastInputs),
+      result: structuredCloneSafe(lastResult)
+    };
+    scenarioStatus.textContent = "現在の計算結果をシナリオAとして保存しました。";
+    updateScenarioCompareDisplay();
+  });
+
+  // シナリオBとして保存
+  saveScenarioBButton.addEventListener("click", () => {
+    scenarioStatus.textContent = "";
+    if (!lastInputs || !lastResult) {
+      scenarioStatus.textContent = "先に「損害額を計算する」を実行してからシナリオBを保存してください。";
+      return;
+    }
+    scenarioB = {
+      inputs: structuredCloneSafe(lastInputs),
+      result: structuredCloneSafe(lastResult)
+    };
+    scenarioStatus.textContent = "現在の計算結果をシナリオBとして保存しました。";
+    updateScenarioCompareDisplay();
+  });
+
+  // シナリオ比較表示／更新
+  showScenarioButton.addEventListener("click", () => {
+    if (!scenarioA && !scenarioB) {
+      scenarioStatus.textContent = "シナリオA/Bのいずれも保存されていません。先に保存してください。";
+      return;
+    }
+    scenarioStatus.textContent = "シナリオ比較を更新しました。";
+    updateScenarioCompareDisplay(true);
   });
 });
 
@@ -548,7 +613,7 @@ function updateResultDisplay(result) {
   document.getElementById("courtRatioLostEarnings").textContent = result.court.ratios.lost;
   document.getElementById("courtRatioOther").textContent = result.court.ratios.other;
 
-  // 自賠責
+// 自賠責
   document.getElementById("jibaiInjuryPain").textContent = yenFormatter.format(result.jibai.injuryPain);
   document.getElementById("jibaiAfterPain").textContent = yenFormatter.format(result.jibai.afterPain);
   document.getElementById("jibaiLostWages").textContent = yenFormatter.format(result.jibai.lostWages);
@@ -628,6 +693,88 @@ function applyInputsToForm(inputs) {
     lossYearsEl.value =
       inputs.lossYearsOverride != null ? String(inputs.lossYearsOverride) : "";
   }
+}
+
+// シンプルなディープコピー（structuredClone が使えない環境向けフォールバック付き）
+function structuredCloneSafe(obj) {
+  try {
+    if (typeof structuredClone === "function") {
+      return structuredClone(obj);
+    }
+  } catch (_e) {
+    // ignore
+  }
+  return JSON.parse(JSON.stringify(obj));
+}
+
+// シナリオ比較表示更新
+function updateScenarioCompareDisplay(forceShow = false) {
+  const container = document.getElementById("scenarioCompare");
+  const aLabelEl = document.getElementById("scenarioALabel");
+  const bLabelEl = document.getElementById("scenarioBLabel");
+
+  const courtNetA = document.getElementById("scenarioCourtNetA");
+  const courtNetB = document.getElementById("scenarioCourtNetB");
+  const jibaiNetA = document.getElementById("scenarioJibaiNetA");
+  const jibaiNetB = document.getElementById("scenarioJibaiNetB");
+  const courtTotalA = document.getElementById("scenarioCourtTotalA");
+  const courtTotalB = document.getElementById("scenarioCourtTotalB");
+  const jibaiTotalA = document.getElementById("scenarioJibaiTotalA");
+  const jibaiTotalB = document.getElementById("scenarioJibaiTotalB");
+
+  // 保存されていない側は「未保存」と表示
+  if (!scenarioA) {
+    aLabelEl.textContent = "未保存";
+    courtNetA.textContent = "–";
+    jibaiNetA.textContent = "–";
+    courtTotalA.textContent = "–";
+    jibaiTotalA.textContent = "–";
+  } else {
+    aLabelEl.textContent = buildScenarioTag(scenarioA.inputs);
+    courtNetA.textContent = yenFormatter.format(scenarioA.result.court.afterPaid);
+    jibaiNetA.textContent = yenFormatter.format(scenarioA.result.jibai.afterPaid);
+    courtTotalA.textContent = yenFormatter.format(scenarioA.result.court.total);
+    jibaiTotalA.textContent = yenFormatter.format(scenarioA.result.jibai.total);
+  }
+
+  if (!scenarioB) {
+    bLabelEl.textContent = "未保存";
+    courtNetB.textContent = "–";
+    jibaiNetB.textContent = "–";
+    courtTotalB.textContent = "–";
+    jibaiTotalB.textContent = "–";
+  } else {
+    bLabelEl.textContent = buildScenarioTag(scenarioB.inputs);
+    courtNetB.textContent = yenFormatter.format(scenarioB.result.court.afterPaid);
+    jibaiNetB.textContent = yenFormatter.format(scenarioB.result.jibai.afterPaid);
+    courtTotalB.textContent = yenFormatter.format(scenarioB.result.court.total);
+    jibaiTotalB.textContent = yenFormatter.format(scenarioB.result.jibai.total);
+  }
+
+  // どちらか一方でも登録があれば表示
+  if ((scenarioA || scenarioB) && container) {
+    container.classList.remove("hidden");
+  } else if (forceShow) {
+    container.classList.add("hidden");
+  }
+}
+
+// シナリオラベル（等級・過失・基礎収入等のタグ文字列）
+function buildScenarioTag(inputs) {
+  const gradeLabel = (() => {
+    if (!inputs.grade || inputs.grade === "none") return "等級：非該当";
+    return "等級：" + inputs.grade + "級";
+  })();
+
+  const faultLabel =
+    inputs.faultPercent != null ? `過失：${inputs.faultPercent}％` : "過失：-";
+
+  const incomeLabel =
+    inputs.annualIncome != null
+      ? `基礎収入：${yenFormatter.format(inputs.annualIncome)}／年`
+      : "基礎収入：-";
+
+  return `${gradeLabel} ／ ${faultLabel} ／ ${incomeLabel}`;
 }
 
 // サマリーテキスト生成
