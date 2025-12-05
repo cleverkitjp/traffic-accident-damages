@@ -300,6 +300,12 @@ body {
   transform: translateY(1px);
   box-shadow: 0 0 0 rgba(0,0,0,0);
 }
+
+.scenario-tag {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin: 0 0 4px;
+}
 }
 
 @media (min-width: 900px) {
