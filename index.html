@@ -1,372 +1,283 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>交通事故 損害賠償オールインワン電卓｜概算目安ツール</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="交通事故損害賠償の概算目安を、自賠責基準と裁判所基準（赤本モデル）で一括計算する弁護士・保険実務向けツールです。入通院慰謝料・後遺障害慰謝料・逸失利益・休業損害などをまとめて算定し、過失相殺・既払金控除後の受取見込額をざっくり把握できます。">
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>交通事故損害賠償オールインワン電卓</title>
+
+  <meta name="description" content="交通事故の傷害・後遺障害・死亡事故の損害額を自賠責基準・裁判所基準で瞬時に概算する計算補助ツール（参考値）。弁護士・保険会社実務向けの軽量Webアプリ。">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: #f7f7f9;
+      margin: 0;
+      color: #222;
+      line-height: 1.6;
+      padding-bottom: 40px;
+    }
+    header {
+      background: #1e293b;
+      color: white;
+      padding: 16px;
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .container {
+      padding: 16px;
+      max-width: 720px;
+      margin: auto;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 18px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #111;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: 500;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+      background: #fff;
+    }
+    .hidden {
+      display: none;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    .result-value {
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: #111;
+    }
+    .muted {
+      color: #555;
+      font-size: 0.9rem;
+    }
+    .sub {
+      font-size: 0.85rem;
+      color: #444;
+    }
+    .chart-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-top: 12px;
+    }
+    .chart-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+    .chart-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chart-legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+    }
+  </style>
 </head>
+
 <body>
-  <header class="site-header">
-    <div class="site-header-inner">
-      <h1 class="site-title">交通事故 損害賠償オールインワン電卓</h1>
-      <p class="site-subtitle">
-        交通事故損害額の概算目安を、自賠責基準・裁判所基準モデルで一括算定する補助ツールです。
-      </p>
+<header>交通事故損害賠償オールインワン電卓</header>
+
+<div class="container">
+
+  <!-- 注意書き -->
+  <section class="card">
+    <div class="muted">
+      本ツールは弁護士・保険会社実務向けの<strong>概算計算補助ツール</strong>です。
+      具体的な和解額の提案や法律判断を行うものではありません。
     </div>
-  </header>
+  </section>
 
-  <main class="page-main">
-    <section class="card notice-card">
-      <h2 class="card-title">このツールについて</h2>
-      <p class="muted">
-        本ツールは、交通事故損害額の<strong>概算目安</strong>を迅速に確認するための
-        <strong>計算補助ツール</strong>です。具体的な法律判断や和解額の推奨を行うものではありません。
-        実際の請求・和解・判決の検討にあたっては、必ず最新の赤本・判例・各社基準をご確認ください。
-      </p>
-    </section>
+  <!-- 入力カード -->
+  <section class="card" id="inputCard">
+    <h2 class="card-title">入力</h2>
 
-    <section class="card">
-      <h2 class="card-title">Step1　通院・休業に関する情報</h2>
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="treatmentDays">治療期間（日数）<span class="required">必須</span></label>
-          <input id="treatmentDays" type="number" inputmode="numeric" min="1" placeholder="例）90">
-          <p class="field-help">初診日から治療終了日までの通算日数（例：3か月ならおおよそ90日）</p>
-        </div>
+    <label>事故類型を選択</label>
+    <select id="caseType">
+      <option value="injury">傷害（入通院）</option>
+      <option value="aftereffect">後遺障害</option>
+      <option value="death">死亡事故</option>
+    </select>
 
-        <div class="form-field">
-          <label for="visitDays">実通院日数（日）<span class="required">必須</span></label>
-          <input id="visitDays" type="number" inputmode="numeric" min="0" placeholder="例）20">
-          <p class="field-help">実際に通院した日数（診療日数）</p>
-        </div>
+    <!-- 共通：基礎収入 -->
+    <label>基礎収入（円 / 年）</label>
+    <input type="number" id="annualIncome" placeholder="例：4,000,000">
 
-        <div class="form-field">
-          <label for="dailyIncome">休業損害の実収入日額（円）<span class="required">必須</span></label>
-          <input id="dailyIncome" type="number" inputmode="numeric" min="0" placeholder="例）12000">
-          <p class="field-help">
-            日給または（年収÷365）など。自賠責では日額6,100円が上限として扱われます。
-          </p>
-        </div>
+    <!-- 傷害用 -->
+    <div id="injuryInputs">
+      <label>治療期間（日）</label>
+      <input type="number" id="treatmentDays">
 
-        <div class="form-field">
-          <label for="absenceDays">休業日数（日）<span class="required">必須</span></label>
-          <input id="absenceDays" type="number" inputmode="numeric" min="0" placeholder="例）30">
-          <p class="field-help">実際に就労できなかった（休業した）日数</p>
-        </div>
+      <label>実通院日数（日）</label>
+      <input type="number" id="visitDays">
 
-        <div class="form-field">
-          <label for="otherCosts">その他実費（任意・円）</label>
-          <input id="otherCosts" type="number" inputmode="numeric" min="0" placeholder="例）15000">
-          <p class="field-help">通院交通費・診断書料など、概算のその他費目があれば入力</p>
-        </div>
+      <label>休業日数（日）</label>
+      <input type="number" id="absenceDays">
+    </div>
 
-        <div class="form-field">
-          <label for="accidentDate">事故日（任意）</label>
-          <input id="accidentDate" type="date">
-          <p class="field-help">将来、遅延損害金を算定する際の基準日として利用予定（現時点では計算に使用しません）</p>
-        </div>
-      </div>
-    </section>
+    <!-- 後遺障害用 -->
+    <div id="afterInputs" class="hidden">
+      <label>後遺障害等級</label>
+      <select id="afterGrade">
+        <option value="none">該当なし</option>
+        <option value="1">1級</option>
+        <option value="2">2級</option>
+        <option value="3">3級</option>
+        <option value="4">4級</option>
+        <option value="5">5級</option>
+        <option value="6">6級</option>
+        <option value="7">7級</option>
+        <option value="8">8級</option>
+        <option value="9">9級</option>
+        <option value="10">10級</option>
+        <option value="11">11級</option>
+        <option value="12">12級</option>
+        <option value="13">13級</option>
+        <option value="14">14級</option>
+      </select>
 
-    <section class="card">
-      <h2 class="card-title">Step2　後遺障害に関する情報</h2>
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="grade">後遺障害等級<span class="required">必須</span></label>
-          <select id="grade">
-            <option value="">選択してください</option>
-            <option value="none">非該当（後遺障害なし）</option>
-            <option value="14">14級</option>
-            <option value="13">13級</option>
-            <option value="12">12級</option>
-            <option value="11">11級</option>
-            <option value="10">10級</option>
-            <option value="9">9級</option>
-            <option value="8">8級</option>
-            <option value="7">7級</option>
-            <option value="6">6級</option>
-            <option value="5">5級</option>
-            <option value="4">4級</option>
-            <option value="3">3級</option>
-            <option value="2">2級</option>
-            <option value="1">1級</option>
-          </select>
-          <p class="field-help">
-            等級選択に応じて、典型的な労働能力喪失率・喪失期間を自動設定します（詳細は下記で上書き可能）。
-          </p>
-        </div>
-      </div>
+      <label>喪失期間（年）</label>
+      <input type="number" id="lossYearsOverride" placeholder="未入力なら自動">
 
-      <button type="button" class="link-button" id="toggleAdvanced">
-        詳細設定（労働能力喪失率・喪失期間）を表示
-      </button>
+      <label>労働能力喪失率（%）</label>
+      <input type="number" id="lossRateOverride" placeholder="未入力なら自動">
+    </div>
 
-      <div id="advancedSection" class="advanced-section hidden">
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="lossRate">労働能力喪失率（％）</label>
-            <input id="lossRate" type="number" inputmode="numeric" min="0" max="100">
-            <p class="field-help">等級に応じた典型値が自動入力されます。必要に応じて上書きしてください。</p>
-          </div>
-          <div class="form-field">
-            <label for="lossYears">労働能力喪失期間（年）</label>
-            <input id="lossYears" type="number" inputmode="decimal" min="0" step="0.1">
-            <p class="field-help">原則67歳までなど、実務で想定する喪失期間。等級ごとの典型値を自動設定します。</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- 死亡事故用 -->
+    <div id="deathInputs" class="hidden">
+      <label>生活費控除方式</label>
+      <select id="deathSupportType">
+        <option value="none">被扶養者なし</option>
+        <option value="one">扶養1名</option>
+        <option value="twoPlus">扶養2名以上</option>
+      </select>
 
-    <section class="card">
-      <h2 class="card-title">Step3　基礎収入（逸失利益の前提）</h2>
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="incomePreset">基礎収入の種類</label>
-          <select id="incomePreset">
-            <option value="custom">実際の年収を入力する</option>
-            <option value="avgAll">平均賃金（全年齢・男女計の目安）</option>
-            <option value="avgMale">平均賃金（男性の目安）</option>
-            <option value="avgFemale">平均賃金（女性の目安）</option>
-          </select>
-          <p class="field-help">
-            平均賃金を選択すると、下の年収欄に概算値を自動入力します（実際の統計値とは異なり、あくまでモデル値です）。
-          </p>
-        </div>
+      <label>生活費控除率（%）任意指定</label>
+      <input type="number" id="deathLifeRate" placeholder="未入力なら自動">
 
-        <div class="form-field">
-          <label for="annualIncome">基礎収入（年額・円）<span class="required">必須</span></label>
-          <input id="annualIncome" type="number" inputmode="numeric" min="0" placeholder="例）4000000">
-          <p class="field-help">
-            逸失利益算定の基礎収入（年額）。現実収入か、平均賃金など実務で採用する想定額。
-          </p>
-        </div>
-      </div>
-    </section>
+      <label>就労可能年数</label>
+      <input type="number" id="deathWorkYears" placeholder="例：30">
 
-    <section class="card">
-      <h2 class="card-title">Step4　過失割合・既払金</h2>
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="faultPercent">被害者側過失割合（％）<span class="required">必須</span></label>
-          <input id="faultPercent" type="number" inputmode="numeric" min="0" max="100" placeholder="例）20">
-          <p class="field-help">被害者側過失を入力します（20％過失なら「20」）。</p>
-        </div>
+      <label>死亡慰謝料（モデル）</label>
+      <select id="deathPainPreset">
+        <option value="self">本人のみ：2,500万円</option>
+        <option value="dependent">一家の支柱：2,800万円</option>
+        <option value="custom">カスタム</option>
+      </select>
 
-        <div class="form-field">
-          <label for="alreadyPaid">既払金合計（任意・円）</label>
-          <input id="alreadyPaid" type="number" inputmode="numeric" min="0" placeholder="例）500000">
-          <p class="field-help">既に支払済みの金額があれば入力（自賠責・任意保険などの合計）。未入力なら0として扱います。</p>
-        </div>
-      </div>
+      <label>死亡慰謝料（カスタム指定・円）</label>
+      <input type="number" id="deathPainCustom" placeholder="任意（上でカスタム選択時）">
 
-      <div class="restore-row">
-        <button type="button" id="restoreButton" class="link-button">
-          前回入力を復元する
-        </button>
-        <span id="restoreStatus" class="restore-status muted"></span>
-      </div>
+      <label>葬儀費（円）</label>
+      <input type="number" id="deathFuneral" placeholder="例：200,000">
+    </div>
 
-      <div id="errorMessages" class="error-messages" aria-live="polite"></div>
+    <label>過失割合（%）※被害者側</label>
+    <input type="number" id="faultPercent" value="0">
 
-      <div class="center">
-        <button type="button" id="calcButton" class="primary-button">損害額を計算する</button>
-      </div>
-    </section>
-    <section id="scenarioSection" class="card">
-      <h2 class="card-title">シナリオ比較（任意）</h2>
-      <p class="muted">
-        等級や過失割合などの前提が異なる<strong>2つのシナリオ</strong>を保存し、裁判所基準・自賠責基準の受取見込額を横並びで比較します。
-        先に「損害額を計算する」を実行してから、現在の計算結果をシナリオA/Bとして保存してください。
-      </p>
+    <label>既払金（円）</label>
+    <input type="number" id="alreadyPaid" value="0">
 
-      <div class="center" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-        <div>
-          <button type="button" id="saveScenarioA" class="primary-button secondary-button">
-            現在の計算結果をシナリオAとして保存
-          </button>
-        </div>
-        <div>
-          <button type="button" id="saveScenarioB" class="primary-button secondary-button">
-            現在の計算結果をシナリオBとして保存
-          </button>
-        </div>
-        <div>
-          <button type="button" id="showScenario" class="link-button">
-            シナリオ比較を表示／更新する
-          </button>
-        </div>
-      </div>
+    <button id="calcButton">損害額を計算する</button>
+  </section>
 
-      <p id="scenarioStatus" class="muted" style="margin-top:6px;"></p>
+  <!-- 結果：サマリー -->
+  <section id="resultSection" class="card hidden">
+    <h2 class="card-title">結果（概算・参考値）</h2>
 
-      <div id="scenarioCompare" class="result-columns hidden" style="margin-top:10px;">
-        <div class="result-card">
-          <h3>シナリオA</h3>
-          <p id="scenarioALabel" class="scenario-tag">未保存</p>
-          <table class="result-table">
-            <tbody>
-              <tr><th>裁判所基準（受取想定）</th><td id="scenarioCourtNetA">–</td></tr>
-              <tr><th>自賠責基準（受取想定）</th><td id="scenarioJibaiNetA">–</td></tr>
-              <tr><th>裁判所基準 総損害額</th><td id="scenarioCourtTotalA">–</td></tr>
-              <tr><th>自賠責 総損害額</th><td id="scenarioJibaiTotalA">–</td></tr>
-            </tbody>
-          </table>
-        </div>
+    <p class="sub">裁判所基準（概算）</p>
+    <div class="result-value" id="courtNetAmount">¥0</div>
 
-        <div class="result-card">
-          <h3>シナリオB</h3>
-          <p id="scenarioBLabel" class="scenario-tag">未保存</p>
-          <table class="result-table">
-            <tbody>
-              <tr><th>裁判所基準（受取想定）</th><td id="scenarioCourtNetB">–</td></tr>
-              <tr><th>自賠責基準（受取想定）</th><td id="scenarioJibaiNetB">–</td></tr>
-              <tr><th>裁判所基準 総損害額</th><td id="scenarioCourtTotalB">–</td></tr>
-              <tr><th>自賠責 総損害額</th><td id="scenarioJibaiTotalB">–</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-    <section id="resultSection" class="card hidden">
-      <h2 class="card-title">結果サマリー（概算目安）</h2>
-      <p class="muted">
-        以下の金額は、一般的な算式と公開されている目安額をモデル化した<strong>概算</strong>です。
-        実際の和解額・判決額を保証するものではありません。
-      </p>
+    <p class="sub" style="margin-top:12px;">自賠責基準（概算）</p>
+    <div class="result-value" id="jibaiNetAmount">¥0</div>
+  </section>
 
-      <div class="result-summary-grid">
-        <div class="result-summary-card">
-          <h3>裁判所基準モデル（過失・既払後）</h3>
-          <p class="result-main" id="courtNetAmount">–</p>
-        </div>
-        <div class="result-summary-card">
-          <h3>自賠責基準（過失・既払後）</h3>
-          <p class="result-main" id="jibaiNetAmount">–</p>
-        </div>
-      </div>
+  <!-- 円グラフ -->
+  <section id="chartSection" class="card hidden">
+    <h2 class="card-title">裁判所基準の損害構造（概算）</h2>
+    <p class="muted">裁判所基準の総損害額の構成比を円グラフで表示します。</p>
 
-      <div class="center" style="margin-top: 12px;">
-        <button type="button" id="copySummaryButton" class="primary-button secondary-button">
-          サマリーをコピー
-        </button>
-        <p id="copySummaryStatus" class="muted" style="margin-top:4px;"></p>
-      </div>
-    </section>
+    <div class="chart-wrapper">
+      <canvas id="courtChart" width="320" height="320"></canvas>
+    </div>
 
-    <section id="detailResults" class="card hidden">
-      <h2 class="card-title">内訳（裁判所基準モデル・自賠責基準）</h2>
+    <div id="chartLegend" class="chart-legend"></div>
+    <p id="chartNote" class="muted"></p>
+  </section>
 
-      <div class="result-columns">
-        <div class="result-card">
-          <h3>裁判所基準モデル</h3>
-          <table class="result-table">
-            <tbody>
-              <tr><th>傷害慰謝料（入通院）</th><td id="courtInjuryPain">–</td></tr>
-              <tr><th>後遺障害慰謝料</th><td id="courtAfterPain">–</td></tr>
-              <tr><th>逸失利益</th><td id="courtLostEarnings">–</td></tr>
-              <tr><th>休業損害</th><td id="courtLostWages">–</td></tr>
-              <tr><th>その他実費</th><td id="courtOtherCosts">–</td></tr>
-              <tr class="result-divider"><th>総損害額</th><td id="courtTotal">–</td></tr>
-              <tr><th>過失相殺後</th><td id="courtAfterFault">–</td></tr>
-              <tr><th>既払控除後（受取想定）</th><td id="courtAfterPaid">–</td></tr>
-            </tbody>
-          </table>
+  <!-- 明細カード -->
+  <section id="detailResults" class="card hidden">
+    <h2 class="card-title">明細（裁判所基準）</h2>
 
-          <h4 class="subheading">損害構成比（総損害額に占める割合）</h4>
-          <table class="result-table small">
-            <tbody>
-              <tr><th>傷害慰謝料</th><td id="courtRatioInjury">–</td></tr>
-              <tr><th>後遺障害慰謝料</th><td id="courtRatioAfter">–</td></tr>
-              <tr><th>逸失利益</th><td id="courtRatioLostEarnings">–</td></tr>
-              <tr><th>休業損害＋その他</th><td id="courtRatioOther">–</td></tr>
-            </tbody>
-          </table>
-        </div>
+    <p>傷害慰謝料：<span id="courtInjuryPain"></span></p>
+    <p>後遺障害 / 死亡慰謝料：<span id="courtAfterPain"></span></p>
+    <p>逸失利益：<span id="courtLostEarnings"></span></p>
+    <p>休業損害：<span id="courtLostWages"></span></p>
+    <p>その他費用：<span id="courtOtherCosts"></span></p>
+    <hr>
+    <p>総損害額：<span id="courtTotal"></span></p>
+    <p>過失相殺後：<span id="courtAfterFault"></span></p>
+    <p>既払控除後（受取額）：<span id="courtAfterPaid"></span></p>
 
-        <div class="result-card">
-          <h3>自賠責基準</h3>
-          <table class="result-table">
-            <tbody>
-              <tr><th>傷害慰謝料</th><td id="jibaiInjuryPain">–</td></tr>
-              <tr><th>後遺障害慰謝料</th><td id="jibaiAfterPain">–</td></tr>
-              <tr><th>休業損害</th><td id="jibaiLostWages">–</td></tr>
-              <tr><th>その他実費</th><td id="jibaiOtherCosts">–</td></tr>
-              <tr class="result-divider"><th>総損害額</th><td id="jibaiTotal">–</td></tr>
-              <tr><th>過失相殺後</th><td id="jibaiAfterFault">–</td></tr>
-              <tr><th>既払控除後（受取想定）</th><td id="jibaiAfterPaid">–</td></tr>
-              <tr><th>傷害120万円枠との比較</th><td id="jibaiCapInfo">–</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <h3 style="margin-top:18px;">構成比</h3>
+    <p>傷害慰謝料：<span id="courtRatioInjury"></span></p>
+    <p>後遺障害 / 死亡慰謝料：<span id="courtRatioAfter"></span></p>
+    <p>逸失利益：<span id="courtRatioLostEarnings"></span></p>
+    <p>その他：<span id="courtRatioOther"></span></p>
 
-      <p class="muted">
-        ※裁判所基準は、各種実務書・公表されている目安額を参考に簡略化した<strong>モデル</strong>であり、
-        実際の赤本記載額や、事案ごとの増減事由（素因減額・過失割合の修正等）を反映したものではありません。
-      </p>
-      <p class="muted">
-        ※任意保険基準は各社の非公開の内部基準であり、本ツールでは取り扱いません。
-      </p>
-    </section>
+    <hr style="margin-top:18px;margin-bottom:18px;">
 
-    <section class="card">
-      <h2 class="card-title">オプション：遅延損害金の概算</h2>
-      <p class="muted">
-        総損害額など任意の金額に対する遅延損害金を、単一の年利で概算します。法定利率は時期により異なるため、
-        年利は利用者側で設定してください。
-      </p>
-      <div class="form-grid">
-        <div class="form-field">
-          <label for="delayBaseAmount">遅延損害金の対象額（円）</label>
-          <input id="delayBaseAmount" type="number" inputmode="numeric" min="0" placeholder="例）裁判所基準の総損害額など">
-          <p class="field-help">裁判所基準の総損害額や、和解交渉での基準額など。</p>
-        </div>
-        <div class="form-field">
-          <label for="delayRate">年利（％）</label>
-          <input id="delayRate" type="number" inputmode="decimal" step="0.1" min="0" value="3.0">
-          <p class="field-help">旧法5％で計算したい場合は「5.0」などに変更してください。</p>
-        </div>
-        <div class="form-field">
-          <label for="delayPayDate">支払日（または和解日）</label>
-          <input id="delayPayDate" type="date">
-          <p class="field-help">
-            事故日はStep1で入力したものを起算日とします（未入力の場合は遅延損害金を計算できません）。
-          </p>
-        </div>
-      </div>
+    <h2 class="card-title">明細（自賠責）</h2>
+    <p>傷害慰謝料：<span id="jibaiInjuryPain"></span></p>
+    <p>後遺障害慰謝料：<span id="jibaiAfterPain"></span></p>
+    <p>休業損害：<span id="jibaiLostWages"></span></p>
+    <p>その他費用：<span id="jibaiOtherCosts"></span></p>
+    <hr>
+    <p>総損害額：<span id="jibaiTotal"></span></p>
+    <p id="jibaiCapInfo" class="muted"></p>
+    <p>過失相殺後：<span id="jibaiAfterFault"></span></p>
+    <p>既払控除後（受取額）：<span id="jibaiAfterPaid"></span></p>
 
-      <div id="delayError" class="error-messages" aria-live="polite" style="margin-top:8px;display:none;"></div>
+  </section>
 
-      <div class="center" style="margin-top: 8px;">
-        <button type="button" id="delayTodayButton" class="link-button">支払日に本日の日付をセット</button>
-      </div>
+</div>
 
-<div class="center" style="margin-top: 4px;">
-        <button type="button" id="delayCalcButton" class="primary-button secondary-button">
-          遅延損害金を計算する
-        </button>
-      </div>
+<script src="script.js"></script>
 
-      <!-- ここを追加 -->
-      <p id="delayCalcStatus" class="muted" style="margin-top:4px;"></p>
-
-      <p id="delayResult" class="muted" style="margin-top:8px;"></p>
-    </section>
-
-    <section class="card notice-card">
-      <h2 class="card-title">免責・ご利用上の注意</h2>
-      <ul class="muted-list">
-        <li>本ツールは、一般的な算式と公開されている目安額をモデル化した<strong>概算計算ツール</strong>です。</li>
-        <li>具体的な事件の法律判断・和解額の推奨・見通しの提示を目的とするものではありません。</li>
-        <li>裁判所基準（赤本）は、出版物・版数・解説書により数万円単位の差異があり得ます。</li>
-        <li>法定利率・自賠責基準・賃金統計の改定により、実務上の水準が変動する可能性があります。</li>
-        <li>GitHub Pages上の完全静的ページとして動作し、入力情報はサーバに送信・保存されません。</li>
-      </ul>
-    </section>
-  </main>
-
-  <script src="script.js"></script>
 </body>
 </html>
