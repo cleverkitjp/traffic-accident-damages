@@ -1,9 +1,12 @@
-// 数値フォーマット（日本円）
+// 日本円フォーマット
 const yenFormatter = new Intl.NumberFormat("ja-JP", {
   style: "currency",
   currency: "JPY",
   maximumFractionDigits: 0
 });
+
+// localStorageキー
+const LS_KEY_INPUTS = "trafficAccidentCalcLastInputsV1";
 
 // 等級ごとの典型的な喪失率・喪失期間（モデル値）
 const gradeLossPreset = {
@@ -24,7 +27,7 @@ const gradeLossPreset = {
   "1":  { rate: 100, years: 45 }
 };
 
-// 自賠責の後遺障害慰謝料（モデル値。実務で使用する場合は最新基準で要調整）
+// 自賠責の後遺障害慰謝料（モデル値）
 const jibaiAfterPainTable = {
   "1": 16500000,
   "2": 12030000,
@@ -70,6 +73,10 @@ const courtInjuryBaseTable = {
   6: 880000
 };
 
+// 直近の計算結果・入力を保持（サマリー生成用）
+let lastInputs = null;
+let lastResult = null;
+
 document.addEventListener("DOMContentLoaded", () => {
   const gradeEl = document.getElementById("grade");
   const lossRateEl = document.getElementById("lossRate");
@@ -79,6 +86,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const calcButton = document.getElementById("calcButton");
   const toggleAdvancedBtn = document.getElementById("toggleAdvanced");
   const advancedSection = document.getElementById("advancedSection");
+  const restoreButton = document.getElementById("restoreButton");
+  const restoreStatus = document.getElementById("restoreStatus");
+  const copySummaryButton = document.getElementById("copySummaryButton");
+  const copySummaryStatus = document.getElementById("copySummaryStatus");
+  const delayTodayButton = document.getElementById("delayTodayButton");
+  const delayCalcButton = document.getElementById("delayCalcButton");
 
   // 等級変更時に喪失率・期間を自動設定
   gradeEl.addEventListener("change", () => {
@@ -121,14 +134,117 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (errors.length === 0) {
       const result = calculateAll(inputs);
+      // グローバルに保存（サマリー・遅延損害金用）
+      lastInputs = inputs;
+      lastResult = result;
+      // localStorage に保存
+      saveInputsToStorage(inputs);
       updateResultDisplay(result);
+      restoreStatus.textContent = ""; // 計算後は復元メッセージをクリア
     }
+  });
+
+  // 前回入力復元
+  restoreButton.addEventListener("click", () => {
+    const loaded = loadInputsFromStorage();
+    if (!loaded) {
+      restoreStatus.textContent = "保存された前回の入力はありません。";
+      return;
+    }
+    applyInputsToForm(loaded);
+    restoreStatus.textContent = "前回の入力をフォームに復元しました。";
+  });
+
+  // サマリーをコピー
+  copySummaryButton.addEventListener("click", async () => {
+    copySummaryStatus.textContent = "";
+    if (!lastInputs || !lastResult) {
+      copySummaryStatus.textContent = "先に「損害額を計算する」を実行してください。";
+      return;
+    }
+    const text = buildSummaryText(lastInputs, lastResult);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        copySummaryStatus.textContent = "サマリーをクリップボードにコピーしました。";
+      } else {
+        // クリップボードAPIがない環境向けフォールバック
+        fallbackCopyText(text);
+        copySummaryStatus.textContent = "サマリーを選択状態にしました。必要に応じてコピーしてください。";
+      }
+    } catch (e) {
+      copySummaryStatus.textContent = "コピーに失敗しました。環境によっては対応していない場合があります。";
+    }
+  });
+
+  // 遅延損害金：支払日に本日をセット
+  delayTodayButton.addEventListener("click", () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    const iso = `${y}-${m}-${d}`;
+    document.getElementById("delayPayDate").value = iso;
+  });
+
+  // 遅延損害金計算
+  delayCalcButton.addEventListener("click", () => {
+    const delayErrorBox = document.getElementById("delayError");
+    const delayResult = document.getElementById("delayResult");
+    delayErrorBox.style.display = "none";
+    delayErrorBox.textContent = "";
+    delayResult.textContent = "";
+
+    const baseAmount = toNumberOrNull(document.getElementById("delayBaseAmount").value);
+    const rate = toNumberOrNull(document.getElementById("delayRate").value);
+    const accidentDateStr = document.getElementById("accidentDate").value;
+    const payDateStr = document.getElementById("delayPayDate").value;
+
+    const errors = [];
+    if (!baseAmount || baseAmount <= 0) {
+      errors.push("遅延損害金の対象額（円）を0より大きい値で入力してください。");
+    }
+    if (!rate || rate < 0) {
+      errors.push("年利（％）を0以上の数値で入力してください。");
+    }
+    if (!accidentDateStr) {
+      errors.push("事故日が未入力のため、遅延損害金を計算できません。Step1で事故日を入力してください。");
+    }
+    if (!payDateStr) {
+      errors.push("支払日（または和解日）を入力してください。");
+    }
+
+    if (errors.length > 0) {
+      delayErrorBox.style.display = "block";
+      delayErrorBox.innerHTML = errors.map((e) => `<div>・${e}</div>`).join("");
+      return;
+    }
+
+    const diff = calcDelayDamages(baseAmount, accidentDateStr, payDateStr, rate);
+    if (diff.error) {
+      delayErrorBox.style.display = "block";
+      delayErrorBox.innerHTML = `<div>・${diff.error}</div>`;
+      return;
+    }
+
+    delayResult.textContent =
+      `事故日から支払日までの経過日数は約 ${diff.days} 日、年利${rate.toFixed(1)}％での遅延損害金は概ね `
+      + `${yenFormatter.format(diff.amount)} 程度です。`;
   });
 });
 
+// 共通：文字列→数値
+function toNumberOrNull(v) {
+  if (v == null) return null;
+  const trimmed = String(v).trim();
+  if (trimmed === "") return null;
+  const n = Number(trimmed);
+  return Number.isNaN(n) ? null : n;
+}
+
 // 入力取得
 function parseInputs() {
-  const intOrNull = (id) => {
+  const intOrNullInput = (id) => {
     const v = document.getElementById(id).value.trim();
     if (v === "") return null;
     const n = Number(v);
@@ -136,22 +252,22 @@ function parseInputs() {
   };
 
   const grade = document.getElementById("grade").value;
-  const lossRate = intOrNull("lossRate");
-  const lossYears = (() => {
+  const lossRateOverride = intOrNullInput("lossRate");
+  const lossYearsOverride = (() => {
     const v = document.getElementById("lossYears").value.trim();
     if (v === "") return null;
     const n = Number(v);
     return Number.isNaN(n) ? null : n;
   })();
 
-  const treatmentDays = intOrNull("treatmentDays");
-  const visitDays = intOrNull("visitDays");
-  const dailyIncome = intOrNull("dailyIncome");
-  const absenceDays = intOrNull("absenceDays");
-  const otherCosts = intOrNull("otherCosts") ?? 0;
-  const annualIncome = intOrNull("annualIncome");
-  const faultPercent = intOrNull("faultPercent");
-  const alreadyPaid = intOrNull("alreadyPaid") ?? 0;
+  const treatmentDays = intOrNullInput("treatmentDays");
+  const visitDays = intOrNullInput("visitDays");
+  const dailyIncome = intOrNullInput("dailyIncome");
+  const absenceDays = intOrNullInput("absenceDays");
+  const otherCosts = intOrNullInput("otherCosts") ?? 0;
+  const annualIncome = intOrNullInput("annualIncome");
+  const faultPercent = intOrNullInput("faultPercent");
+  const alreadyPaid = intOrNullInput("alreadyPaid") ?? 0;
   const accidentDate = document.getElementById("accidentDate").value || null;
 
   return {
@@ -161,8 +277,8 @@ function parseInputs() {
     absenceDays,
     otherCosts,
     grade,
-    lossRateOverride: lossRate,
-    lossYearsOverride: lossYears,
+    lossRateOverride,
+    lossYearsOverride,
     annualIncome,
     faultPercent,
     alreadyPaid,
@@ -222,7 +338,7 @@ function calculateAll(inputs) {
   const jibaiInjuryPain = calcJibaiInjuryPain(inputs.treatmentDays, inputs.visitDays);
   const jibaiLostWages = calcJibaiLostEarnings(inputs.dailyIncome, inputs.absenceDays);
   const jibaiAfterPain = calcJibaiAfterEffectPain(inputs.grade);
-  const jibaiOtherCosts = inputs.otherCosts; // 全額その他として加算（簡略モデル）
+  const jibaiOtherCosts = inputs.otherCosts;
 
   const jibaiTotalGross = jibaiInjuryPain + jibaiLostWages + jibaiAfterPain + jibaiOtherCosts;
   const jibaiAfterFault = applyFault(jibaiTotalGross, fault);
@@ -232,7 +348,9 @@ function calculateAll(inputs) {
   // 裁判所基準モデル
   const courtInjuryPain = calcCourtInjuryPain(inputs.treatmentDays, inputs.visitDays);
   const courtAfterPain = calcCourtAfterEffectPain(inputs.grade);
-  const courtLostEarnings = calcLostEarningsCourt(inputs.annualIncome, getLossRate(inputs), getLossYears(inputs));
+  const lossRate = getLossRate(inputs);
+  const lossYears = getLossYears(inputs);
+  const courtLostEarnings = calcLostEarningsCourt(inputs.annualIncome, lossRate, lossYears);
   const courtLostWages = calcCourtLostWages(inputs.dailyIncome, inputs.absenceDays);
   const courtOtherCosts = inputs.otherCosts;
 
@@ -268,7 +386,9 @@ function calculateAll(inputs) {
       total: courtTotalGross,
       afterFault: courtAfterFault,
       afterPaid: courtAfterPaid,
-      ratios
+      ratios,
+      lossRate,
+      lossYears
     }
   };
 }
@@ -405,11 +525,9 @@ function calcPercentageDistribution(parts) {
 
 // 結果表示更新
 function updateResultDisplay(result) {
-  // セクション表示
   document.getElementById("resultSection").classList.remove("hidden");
   document.getElementById("detailResults").classList.remove("hidden");
 
-  // サマリー
   document.getElementById("courtNetAmount").textContent =
     result.court.afterPaid > 0 ? yenFormatter.format(result.court.afterPaid) : "¥0";
   document.getElementById("jibaiNetAmount").textContent =
@@ -449,4 +567,157 @@ function updateResultDisplay(result) {
     }
   })();
   document.getElementById("jibaiCapInfo").textContent = capText;
+}
+
+// localStorage 保存
+function saveInputsToStorage(inputs) {
+  try {
+    const json = JSON.stringify(inputs);
+    localStorage.setItem(LS_KEY_INPUTS, json);
+  } catch (_e) {
+    // 何もしない（ストレージが使えない環境）
+  }
+}
+
+// localStorage 読み込み
+function loadInputsFromStorage() {
+  try {
+    const json = localStorage.getItem(LS_KEY_INPUTS);
+    if (!json) return null;
+    const obj = JSON.parse(json);
+    if (!obj || typeof obj !== "object") return null;
+    return obj;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// 保存された入力をフォームに反映
+function applyInputsToForm(inputs) {
+  const setValue = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (v === null || v === undefined) {
+      el.value = "";
+    } else {
+      el.value = String(v);
+    }
+  };
+
+  setValue("treatmentDays", inputs.treatmentDays);
+  setValue("visitDays", inputs.visitDays);
+  setValue("dailyIncome", inputs.dailyIncome);
+  setValue("absenceDays", inputs.absenceDays);
+  setValue("otherCosts", inputs.otherCosts);
+  setValue("annualIncome", inputs.annualIncome);
+  setValue("faultPercent", inputs.faultPercent);
+  setValue("alreadyPaid", inputs.alreadyPaid);
+  setValue("accidentDate", inputs.accidentDate || "");
+
+  const gradeEl = document.getElementById("grade");
+  if (gradeEl) gradeEl.value = inputs.grade || "";
+
+  // 詳細設定（喪失率・期間）も復元
+  const lossRateEl = document.getElementById("lossRate");
+  const lossYearsEl = document.getElementById("lossYears");
+  if (lossRateEl) {
+    lossRateEl.value =
+      inputs.lossRateOverride != null ? String(inputs.lossRateOverride) : "";
+  }
+  if (lossYearsEl) {
+    lossYearsEl.value =
+      inputs.lossYearsOverride != null ? String(inputs.lossYearsOverride) : "";
+  }
+}
+
+// サマリーテキスト生成
+function buildSummaryText(inputs, result) {
+  const gradeLabel = (() => {
+    if (!inputs.grade || inputs.grade === "none") return "非該当";
+    return inputs.grade + "級";
+  })();
+
+  const baseLines = [];
+
+  baseLines.push("事案メモ（概算試算）");
+  baseLines.push("");
+  baseLines.push(`・治療期間：${inputs.treatmentDays ?? "-"}日（実通院${inputs.visitDays ?? "-"}日）`);
+  baseLines.push(`・後遺障害等級：${gradeLabel}`);
+  baseLines.push(`・基礎収入：${inputs.annualIncome ? yenFormatter.format(inputs.annualIncome) + "／年" : "-"}`);
+  baseLines.push(`・被害者側過失割合：${inputs.faultPercent != null ? inputs.faultPercent + "％" : "-"}`);
+  baseLines.push(`・既払金合計：${yenFormatter.format(inputs.alreadyPaid ?? 0)}`);
+  if (inputs.accidentDate) {
+    baseLines.push(`・事故日：${inputs.accidentDate}`);
+  }
+  baseLines.push("");
+
+  // 裁判所基準
+  baseLines.push("【裁判所基準モデル】");
+  baseLines.push(`・総損害額（過失・既払前）：${yenFormatter.format(result.court.total)}`);
+  baseLines.push(`・過失相殺後：${yenFormatter.format(result.court.afterFault)}`);
+  baseLines.push(`・既払控除後（受取想定）：${yenFormatter.format(result.court.afterPaid)}`);
+  baseLines.push(
+    `・内訳：傷害慰謝料 ${yenFormatter.format(result.court.injuryPain)} / `
+    + `後遺障害慰謝料 ${yenFormatter.format(result.court.afterPain)} / `
+    + `逸失利益 ${yenFormatter.format(result.court.lostEarnings)} / `
+    + `休業損害 ${yenFormatter.format(result.court.lostWages)} / `
+    + `その他 ${yenFormatter.format(result.court.otherCosts)}`
+  );
+  baseLines.push("");
+
+  // 自賠責基準
+  baseLines.push("【自賠責基準】");
+  baseLines.push(`・総損害額（過失・既払前）：${yenFormatter.format(result.jibai.total)}`);
+  baseLines.push(`・過失相殺後：${yenFormatter.format(result.jibai.afterFault)}`);
+  baseLines.push(`・既払控除後（受取想定）：${yenFormatter.format(result.jibai.afterPaid)}`);
+  baseLines.push(
+    `・内訳：傷害慰謝料 ${yenFormatter.format(result.jibai.injuryPain)} / `
+    + `後遺障害慰謝料 ${yenFormatter.format(result.jibai.afterPain)} / `
+    + `休業損害 ${yenFormatter.format(result.jibai.lostWages)} / `
+    + `その他 ${yenFormatter.format(result.jibai.otherCosts)}`
+  );
+  baseLines.push("");
+
+  baseLines.push("※本試算は一般的な算式・公開目安に基づく概算であり、実際の和解額を保証するものではありません。");
+
+  return baseLines.join("\n");
+}
+
+// クリップボードAPI非対応環境向けフォールバック
+function fallbackCopyText(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand("copy");
+  } catch (_e) {
+    // 失敗しても特に何もしない
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+// 遅延損害金計算
+function calcDelayDamages(baseAmount, startDateStr, endDateStr, ratePercent) {
+  try {
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return { error: "日付の形式が不正です。" };
+    }
+    const diffMs = end.getTime() - start.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) {
+      return { error: "支払日が事故日より前になっています。日付を確認してください。" };
+    }
+    const rate = ratePercent / 100;
+    const amount = Math.round(baseAmount * rate * (diffDays / 365));
+    return { amount, days: Math.round(diffDays) };
+  } catch (_e) {
+    return { error: "遅延損害金の計算中にエラーが発生しました。" };
+  }
 }
