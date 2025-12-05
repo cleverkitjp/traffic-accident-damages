@@ -161,6 +161,13 @@
         </div>
       </div>
 
+      <div class="restore-row">
+        <button type="button" id="restoreButton" class="link-button">
+          前回入力を復元する
+        </button>
+        <span id="restoreStatus" class="restore-status muted"></span>
+      </div>
+
       <div id="errorMessages" class="error-messages" aria-live="polite"></div>
 
       <div class="center">
@@ -184,6 +191,13 @@
           <h3>自賠責基準（過失・既払後）</h3>
           <p class="result-main" id="jibaiNetAmount">–</p>
         </div>
+      </div>
+
+      <div class="center" style="margin-top: 12px;">
+        <button type="button" id="copySummaryButton" class="primary-button secondary-button">
+          サマリーをコピー
+        </button>
+        <p id="copySummaryStatus" class="muted" style="margin-top:4px;"></p>
       </div>
     </section>
 
@@ -241,6 +255,47 @@
       <p class="muted">
         ※任意保険基準は各社の非公開の内部基準であり、本ツールでは取り扱いません。
       </p>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">オプション：遅延損害金の概算</h2>
+      <p class="muted">
+        総損害額など任意の金額に対する遅延損害金を、単一の年利で概算します。法定利率は時期により異なるため、
+        年利は利用者側で設定してください。
+      </p>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="delayBaseAmount">遅延損害金の対象額（円）</label>
+          <input id="delayBaseAmount" type="number" inputmode="numeric" min="0" placeholder="例）裁判所基準の総損害額など">
+          <p class="field-help">裁判所基準の総損害額や、和解交渉での基準額など。</p>
+        </div>
+        <div class="form-field">
+          <label for="delayRate">年利（％）</label>
+          <input id="delayRate" type="number" inputmode="decimal" step="0.1" min="0" value="3.0">
+          <p class="field-help">旧法5％で計算したい場合は「5.0」などに変更してください。</p>
+        </div>
+        <div class="form-field">
+          <label for="delayPayDate">支払日（または和解日）</label>
+          <input id="delayPayDate" type="date">
+          <p class="field-help">
+            事故日はStep1で入力したものを起算日とします（未入力の場合は遅延損害金を計算できません）。
+          </p>
+        </div>
+      </div>
+
+      <div id="delayError" class="error-messages" aria-live="polite" style="margin-top:8px;display:none;"></div>
+
+      <div class="center" style="margin-top: 8px;">
+        <button type="button" id="delayTodayButton" class="link-button">支払日に本日の日付をセット</button>
+      </div>
+
+      <div class="center" style="margin-top: 4px;">
+        <button type="button" id="delayCalcButton" class="primary-button secondary-button">
+          遅延損害金を計算する
+        </button>
+      </div>
+
+      <p id="delayResult" class="muted" style="margin-top:8px;"></p>
     </section>
 
     <section class="card notice-card">
