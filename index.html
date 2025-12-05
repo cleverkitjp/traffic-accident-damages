@@ -174,7 +174,61 @@
         <button type="button" id="calcButton" class="primary-button">損害額を計算する</button>
       </div>
     </section>
+    <section id="scenarioSection" class="card">
+      <h2 class="card-title">シナリオ比較（任意）</h2>
+      <p class="muted">
+        等級や過失割合などの前提が異なる<strong>2つのシナリオ</strong>を保存し、裁判所基準・自賠責基準の受取見込額を横並びで比較します。
+        先に「損害額を計算する」を実行してから、現在の計算結果をシナリオA/Bとして保存してください。
+      </p>
 
+      <div class="center" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+        <div>
+          <button type="button" id="saveScenarioA" class="primary-button secondary-button">
+            現在の計算結果をシナリオAとして保存
+          </button>
+        </div>
+        <div>
+          <button type="button" id="saveScenarioB" class="primary-button secondary-button">
+            現在の計算結果をシナリオBとして保存
+          </button>
+        </div>
+        <div>
+          <button type="button" id="showScenario" class="link-button">
+            シナリオ比較を表示／更新する
+          </button>
+        </div>
+      </div>
+
+      <p id="scenarioStatus" class="muted" style="margin-top:6px;"></p>
+
+      <div id="scenarioCompare" class="result-columns hidden" style="margin-top:10px;">
+        <div class="result-card">
+          <h3>シナリオA</h3>
+          <p id="scenarioALabel" class="scenario-tag">未保存</p>
+          <table class="result-table">
+            <tbody>
+              <tr><th>裁判所基準（受取想定）</th><td id="scenarioCourtNetA">–</td></tr>
+              <tr><th>自賠責基準（受取想定）</th><td id="scenarioJibaiNetA">–</td></tr>
+              <tr><th>裁判所基準 総損害額</th><td id="scenarioCourtTotalA">–</td></tr>
+              <tr><th>自賠責 総損害額</th><td id="scenarioJibaiTotalA">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="result-card">
+          <h3>シナリオB</h3>
+          <p id="scenarioBLabel" class="scenario-tag">未保存</p>
+          <table class="result-table">
+            <tbody>
+              <tr><th>裁判所基準（受取想定）</th><td id="scenarioCourtNetB">–</td></tr>
+              <tr><th>自賠責基準（受取想定）</th><td id="scenarioJibaiNetB">–</td></tr>
+              <tr><th>裁判所基準 総損害額</th><td id="scenarioCourtTotalB">–</td></tr>
+              <tr><th>自賠責 総損害額</th><td id="scenarioJibaiTotalB">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
     <section id="resultSection" class="card hidden">
       <h2 class="card-title">結果サマリー（概算目安）</h2>
       <p class="muted">
