@@ -4,122 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>交通事故損害賠償オールインワン電卓</title>
-
   <meta name="description" content="交通事故の傷害・後遺障害・死亡事故の損害額を自賠責基準・裁判所基準で瞬時に概算する計算補助ツール（参考値）。弁護士・保険会社実務向けの軽量Webアプリ。">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      background: #f7f7f9;
-      margin: 0;
-      color: #222;
-      line-height: 1.6;
-      padding-bottom: 40px;
-    }
-    header {
-      background: #1e293b;
-      color: white;
-      padding: 16px;
-      text-align: center;
-      font-size: 1.2rem;
-      font-weight: 600;
-    }
-    .container {
-      padding: 16px;
-      max-width: 720px;
-      margin: auto;
-    }
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 18px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }
-    .card-title {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #111;
-    }
-    label {
-      display: block;
-      margin-top: 10px;
-      font-weight: 500;
-    }
-    input, select {
-      width: 100%;
-      padding: 10px;
-      margin-top: 4px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 1rem;
-      background: #fff;
-    }
-    .hidden {
-      display: none;
-    }
-    button {
-      width: 100%;
-      padding: 14px;
-      margin-top: 20px;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 1.1rem;
-      font-weight: 600;
-    }
-    h2 {
-      margin-top: 0;
-    }
-    .result-value {
-      font-weight: 700;
-      font-size: 1.15rem;
-      color: #111;
-    }
-    .muted {
-      color: #555;
-      font-size: 0.9rem;
-    }
-    .sub {
-      font-size: 0.85rem;
-      color: #444;
-    }
-    .chart-wrapper {
-      display: flex;
-      justify-content: center;
-      margin-top: 12px;
-    }
-    .chart-legend {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 10px;
-      font-size: 0.9rem;
-    }
-    .chart-legend-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .chart-legend-color {
-      width: 12px;
-      height: 12px;
-      border-radius: 999px;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
 <header>交通事故損害賠償オールインワン電卓</header>
 
 <div class="container">
-
   <!-- 注意書き -->
   <section class="card">
     <div class="muted">
       本ツールは弁護士・保険会社実務向けの<strong>概算計算補助ツール</strong>です。
       具体的な和解額の提案や法律判断を行うものではありません。
+      赤本等の基準・個別事情に基づく最終判断は、必ず利用者ご自身で行ってください。
     </div>
   </section>
 
@@ -128,90 +26,100 @@
     <h2 class="card-title">入力</h2>
 
     <label>事故類型を選択</label>
-    <select id="caseType">
-      <option value="injury">傷害（入通院）</option>
-      <option value="aftereffect">後遺障害</option>
+    <select id="victimStatus">
+      <option value="injury">傷害（入通院中心）</option>
+      <option value="after">後遺障害（後遺のみ / 主として後遺）</option>
       <option value="death">死亡事故</option>
     </select>
 
-    <!-- 共通：基礎収入 -->
-    <label>基礎収入（円 / 年）</label>
-    <input type="number" id="annualIncome" placeholder="例：4,000,000">
+    <label>事故日</label>
+    <input type="date" id="accidentDate">
 
-    <!-- 傷害用 -->
+    <label>基礎収入（円 / 年）</label>
+    <input type="number" id="annualIncome" placeholder="例：4000000">
+
+    <!-- 傷害・休業損害関連 -->
     <div id="injuryInputs">
       <label>治療期間（日）</label>
-      <input type="number" id="treatmentDays">
+      <input type="number" id="treatmentDays" placeholder="例：120">
 
       <label>実通院日数（日）</label>
-      <input type="number" id="visitDays">
+      <input type="number" id="visitDays" placeholder="例：40">
 
       <label>休業日数（日）</label>
-      <input type="number" id="absenceDays">
+      <input type="number" id="absenceDays" placeholder="例：30">
+
+      <label>日額収入（休業損害用・円/日）</label>
+      <input type="number" id="dailyIncome" placeholder="例：12000">
     </div>
 
-    <!-- 後遺障害用 -->
-    <div id="afterInputs" class="hidden">
+    <!-- 後遺障害関連 -->
+    <div id="afterInputs">
       <label>後遺障害等級</label>
-      <select id="afterGrade">
-        <option value="none">該当なし</option>
-        <option value="1">1級</option>
-        <option value="2">2級</option>
-        <option value="3">3級</option>
-        <option value="4">4級</option>
-        <option value="5">5級</option>
-        <option value="6">6級</option>
-        <option value="7">7級</option>
-        <option value="8">8級</option>
-        <option value="9">9級</option>
-        <option value="10">10級</option>
-        <option value="11">11級</option>
-        <option value="12">12級</option>
-        <option value="13">13級</option>
+      <select id="grade">
+        <option value="none">非該当 / 不明</option>
         <option value="14">14級</option>
+        <option value="13">13級</option>
+        <option value="12">12級</option>
+        <option value="11">11級</option>
+        <option value="10">10級</option>
+        <option value="9">9級</option>
+        <option value="8">8級</option>
+        <option value="7">7級</option>
+        <option value="6">6級</option>
+        <option value="5">5級</option>
+        <option value="4">4級</option>
+        <option value="3">3級</option>
+        <option value="2">2級</option>
+        <option value="1">1級</option>
       </select>
 
-      <label>喪失期間（年）</label>
-      <input type="number" id="lossYearsOverride" placeholder="未入力なら自動">
+      <label>労働能力喪失率（%）※任意指定</label>
+      <input type="number" id="lossRate" placeholder="空欄なら等級から自動設定">
 
-      <label>労働能力喪失率（%）</label>
-      <input type="number" id="lossRateOverride" placeholder="未入力なら自動">
+      <label>喪失期間（年）※任意指定</label>
+      <input type="number" id="lossYears" placeholder="空欄なら等級から自動設定">
     </div>
 
-    <!-- 死亡事故用 -->
-    <div id="deathInputs" class="hidden">
+    <!-- 死亡事故関連 -->
+    <div id="deathInputs">
       <label>生活費控除方式</label>
       <select id="deathSupportType">
+        <option value="">選択してください</option>
         <option value="none">被扶養者なし</option>
         <option value="one">扶養1名</option>
         <option value="twoPlus">扶養2名以上</option>
       </select>
 
       <label>生活費控除率（%）任意指定</label>
-      <input type="number" id="deathLifeRate" placeholder="未入力なら自動">
+      <input type="number" id="deathLifeRate" placeholder="空欄なら扶養状況から自動（例：30）">
 
-      <label>就労可能年数</label>
+      <label>就労可能年数（年）</label>
       <input type="number" id="deathWorkYears" placeholder="例：30">
 
       <label>死亡慰謝料（モデル）</label>
       <select id="deathPainPreset">
-        <option value="self">本人のみ：2,500万円</option>
-        <option value="dependent">一家の支柱：2,800万円</option>
-        <option value="custom">カスタム</option>
+        <option value="">選択してください</option>
+        <option value="self">本人のみ（モデル）：約2,900万円</option>
+        <option value="dependent">一家の支柱（モデル）：約3,500万円</option>
+        <option value="custom">任意額を指定する</option>
       </select>
 
       <label>死亡慰謝料（カスタム指定・円）</label>
-      <input type="number" id="deathPainCustom" placeholder="任意（上でカスタム選択時）">
+      <input type="number" id="deathPainCustom" placeholder="上で「任意額」を選んだ場合のみ使用">
 
       <label>葬儀費（円）</label>
-      <input type="number" id="deathFuneral" placeholder="例：200,000">
+      <input type="number" id="funeralCost" placeholder="例：1200000">
     </div>
 
+    <label>その他費用（実費等・円）</label>
+    <input type="number" id="otherCosts" value="0" placeholder="治療費自己負担・雑費など（任意）">
+
     <label>過失割合（%）※被害者側</label>
-    <input type="number" id="faultPercent" value="0">
+    <input type="number" id="faultPercent" value="0" placeholder="例：20">
 
     <label>既払金（円）</label>
-    <input type="number" id="alreadyPaid" value="0">
+    <input type="number" id="alreadyPaid" value="0" placeholder="自賠責・任意保険等の既払合計">
 
     <button id="calcButton">損害額を計算する</button>
   </section>
@@ -220,29 +128,34 @@
   <section id="resultSection" class="card hidden">
     <h2 class="card-title">結果（概算・参考値）</h2>
 
-    <p class="sub">裁判所基準（概算）</p>
+    <p class="sub">裁判所基準（モデル・過失・既払控除後）</p>
     <div class="result-value" id="courtNetAmount">¥0</div>
 
-    <p class="sub" style="margin-top:12px;">自賠責基準（概算）</p>
+    <p class="sub" style="margin-top:12px;">自賠責基準（過失・既払控除後）</p>
     <div class="result-value" id="jibaiNetAmount">¥0</div>
+
+    <p class="muted" style="margin-top:10px;">
+      ※上記はいずれも公開されている目安額・モデル算式に基づく概算値であり、
+      実際の解決額を保証するものではありません。
+    </p>
   </section>
 
-  <!-- 円グラフ -->
+  <!-- 裁判所基準の損害構造グラフ -->
   <section id="chartSection" class="card hidden">
     <h2 class="card-title">裁判所基準の損害構造（概算）</h2>
-    <p class="muted">裁判所基準の総損害額の構成比を円グラフで表示します。</p>
-
+    <p class="muted">
+      裁判所基準の総損害額に占める、傷害慰謝料・後遺障害／死亡慰謝料・逸失利益・その他（休業損害＋その他費目）の割合を円グラフで表示します。
+    </p>
     <div class="chart-wrapper">
-      <canvas id="courtChart" width="320" height="320"></canvas>
+      <canvas id="courtChart" width="320" height="320" aria-label="損害構造グラフ" role="img"></canvas>
     </div>
-
     <div id="chartLegend" class="chart-legend"></div>
-    <p id="chartNote" class="muted"></p>
+    <p id="chartNote" class="muted" style="margin-top:6px;"></p>
   </section>
 
   <!-- 明細カード -->
   <section id="detailResults" class="card hidden">
-    <h2 class="card-title">明細（裁判所基準）</h2>
+    <h2 class="card-title">明細（裁判所基準モデル）</h2>
 
     <p>傷害慰謝料：<span id="courtInjuryPain"></span></p>
     <p>後遺障害 / 死亡慰謝料：<span id="courtAfterPain"></span></p>
@@ -252,7 +165,7 @@
     <hr>
     <p>総損害額：<span id="courtTotal"></span></p>
     <p>過失相殺後：<span id="courtAfterFault"></span></p>
-    <p>既払控除後（受取額）：<span id="courtAfterPaid"></span></p>
+    <p>既払控除後（受取想定）：<span id="courtAfterPaid"></span></p>
 
     <h3 style="margin-top:18px;">構成比</h3>
     <p>傷害慰謝料：<span id="courtRatioInjury"></span></p>
@@ -262,7 +175,7 @@
 
     <hr style="margin-top:18px;margin-bottom:18px;">
 
-    <h2 class="card-title">明細（自賠責）</h2>
+    <h2 class="card-title">明細（自賠責基準モデル）</h2>
     <p>傷害慰謝料：<span id="jibaiInjuryPain"></span></p>
     <p>後遺障害慰謝料：<span id="jibaiAfterPain"></span></p>
     <p>休業損害：<span id="jibaiLostWages"></span></p>
@@ -271,13 +184,10 @@
     <p>総損害額：<span id="jibaiTotal"></span></p>
     <p id="jibaiCapInfo" class="muted"></p>
     <p>過失相殺後：<span id="jibaiAfterFault"></span></p>
-    <p>既払控除後（受取額）：<span id="jibaiAfterPaid"></span></p>
-
+    <p>既払控除後（受取想定）：<span id="jibaiAfterPaid"></span></p>
   </section>
-
 </div>
 
 <script src="script.js"></script>
-
 </body>
 </html>
