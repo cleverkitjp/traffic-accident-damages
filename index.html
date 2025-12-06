@@ -143,13 +143,46 @@
     <h2 class="card-title">結果（概算・参考値）</h2>
 
     <p id="caseSummary" class="muted" style="margin-top:4px;"></p>
+    <p id="deathModelNote" class="muted small-note"></p>
 
+    <!-- 裁判所基準 -->
     <p class="sub" style="margin-top:12px;">裁判所基準（モデル・過失・既払控除後）</p>
     <div class="result-value" id="courtNetAmount">¥0</div>
+
+    <div class="result-steps">
+      <div class="result-step-row">
+        <span class="result-step-label">① 総損害額</span>
+        <span class="result-step-value" id="courtStepTotal">¥0</span>
+      </div>
+      <div class="result-step-row">
+        <span class="result-step-label">② 過失相殺後</span>
+        <span class="result-step-value" id="courtStepFault">¥0</span>
+      </div>
+      <div class="result-step-row">
+        <span class="result-step-label">③ 既払控除後</span>
+        <span class="result-step-value" id="courtStepPaid">¥0</span>
+      </div>
+    </div>
     <p id="courtHint" class="muted" style="margin-top:4px;"></p>
 
+    <!-- 自賠責基準 -->
     <p class="sub" style="margin-top:16px;">自賠責基準（過失・既払控除後）</p>
     <div class="result-value" id="jibaiNetAmount">¥0</div>
+
+    <div class="result-steps">
+      <div class="result-step-row">
+        <span class="result-step-label">① 総損害額</span>
+        <span class="result-step-value" id="jibaiStepTotal">¥0</span>
+      </div>
+      <div class="result-step-row">
+        <span class="result-step-label">② 過失相殺後</span>
+        <span class="result-step-value" id="jibaiStepFault">¥0</span>
+      </div>
+      <div class="result-step-row">
+        <span class="result-step-label">③ 既払控除後</span>
+        <span class="result-step-value" id="jibaiStepPaid">¥0</span>
+      </div>
+    </div>
     <p id="jibaiHint" class="muted" style="margin-top:4px;"></p>
 
     <p class="muted" style="margin-top:10px;">
@@ -211,6 +244,7 @@
   </section>
 </div>
 
-<script src="script.js"></script>
+<!-- バージョン付きでキャッシュ更新 -->
+<script src="script.js?v=20251206b"></script>
 </body>
 </html>
