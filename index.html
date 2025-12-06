@@ -28,12 +28,24 @@
     <label>事故類型を選択</label>
     <select id="victimStatus">
       <option value="injury">傷害（入通院中心）</option>
-      <option value="after">後遺障害（後遺のみ / 主として後遺）</option>
+      <option value="after">後遺障害（後遺のみ／主として後遺）</option>
       <option value="death">死亡事故</option>
+    </select>
+
+    <label>典型モデル（任意）</label>
+    <select id="modelPreset">
+      <option value="">選択しない</option>
+      <option value="after_14_30">後遺14級・30代・年収400万モデル</option>
+      <option value="after_12_40">後遺12級・40代・年収500万モデル</option>
+      <option value="after_9_30">後遺9級・30代・年収600万モデル</option>
+      <option value="death_40_dep">死亡・40代一家の支柱モデル</option>
     </select>
 
     <label>事故日</label>
     <input type="date" id="accidentDate">
+
+    <label>年齢（被害者）</label>
+    <input type="number" id="age" placeholder="例：40">
 
     <label>基礎収入（円 / 年）</label>
     <input type="number" id="annualIncome" placeholder="例：4000000">
@@ -75,10 +87,10 @@
       </select>
 
       <label>労働能力喪失率（%）※任意指定</label>
-      <input type="number" id="lossRate" placeholder="空欄なら等級から自動設定">
+      <input type="number" id="lossRate" placeholder="空欄なら等級＋年齢から自動設定">
 
       <label>喪失期間（年）※任意指定</label>
-      <input type="number" id="lossYears" placeholder="空欄なら等級から自動設定">
+      <input type="number" id="lossYears" placeholder="空欄なら等級＋年齢から自動設定">
     </div>
 
     <!-- 死亡事故関連 -->
@@ -92,16 +104,16 @@
       </select>
 
       <label>生活費控除率（%）任意指定</label>
-      <input type="number" id="deathLifeRate" placeholder="空欄なら扶養状況から自動（例：30）">
+      <input type="number" id="deathLifeRate" placeholder="空欄なら年齢＋扶養状況＋収入から自動">
 
       <label>就労可能年数（年）</label>
-      <input type="number" id="deathWorkYears" placeholder="例：30">
+      <input type="number" id="deathWorkYears" placeholder="空欄か0なら年齢から自動（67歳まで）">
 
       <label>死亡慰謝料（モデル）</label>
       <select id="deathPainPreset">
         <option value="">選択してください</option>
-        <option value="self">本人のみ（モデル）：約2,900万円</option>
-        <option value="dependent">一家の支柱（モデル）：約3,500万円</option>
+        <option value="self">本人のみモデル（約2,900万円）</option>
+        <option value="dependent">一家の支柱モデル（約3,500万円）</option>
         <option value="custom">任意額を指定する</option>
       </select>
 
