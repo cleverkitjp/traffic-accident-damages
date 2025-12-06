@@ -17,18 +17,18 @@ const gradeLossPreset = {
   "12": { rate: 14, years: 10 },
   "11": { rate: 20, years: 15 },
   "10": { rate: 27, years: 17 },
-  "9": { rate: 35, years: 20 },
-  "8": { rate: 45, years: 22 },
-  "7": { rate: 56, years: 27 },
-  "6": { rate: 67, years: 30 },
-  "5": { rate: 79, years: 32 },
-  "4": { rate: 79, years: 34 },
-  "3": { rate: 100, years: 35 },
-  "2": { rate: 100, years: 40 },
-  "1": { rate: 100, years: 45 }
+  "9":  { rate: 35, years: 20 },
+  "8":  { rate: 45, years: 22 },
+  "7":  { rate: 56, years: 27 },
+  "6":  { rate: 67, years: 30 },
+  "5":  { rate: 79, years: 32 },
+  "4":  { rate: 79, years: 34 },
+  "3":  { rate: 100, years: 35 },
+  "2":  { rate: 100, years: 40 },
+  "1":  { rate: 100, years: 45 }
 };
 
-// 後遺障害慰謝料（裁判所基準・モデル）
+// 後遺障害慰謝料（裁判所基準・代表額）
 const courtAfterPainTable = {
   none: 0,
   "14": 1100000,
@@ -36,15 +36,15 @@ const courtAfterPainTable = {
   "12": 2900000,
   "11": 4200000,
   "10": 5500000,
-  "9": 6900000,
-  "8": 8300000,
-  "7": 10300000,
-  "6": 11800000,
-  "5": 14000000,
-  "4": 16700000,
-  "3": 19900000,
-  "2": 23700000,
-  "1": 28000000
+  "9":  6900000,
+  "8":  8300000,
+  "7":  10300000,
+  "6":  11800000,
+  "5":  14000000,
+  "4":  16700000,
+  "3":  19900000,
+  "2":  23700000,
+  "1":  28000000
 };
 
 // 傷害慰謝料（入通院）裁判所基準のざっくりベース（ヶ月）
@@ -65,15 +65,15 @@ const jibaiAfterPainTable = {
   "12": 940000,
   "11": 1350000,
   "10": 1900000,
-  "9": 2490000,
-  "8": 3310000,
-  "7": 4190000,
-  "6": 5120000,
-  "5": 6180000,
-  "4": 7370000,
-  "3": 8610000,
-  "2": 10960000,
-  "1": 11000000
+  "9":  2490000,
+  "8":  3310000,
+  "7":  4190000,
+  "6":  5120000,
+  "5":  6180000,
+  "4":  7370000,
+  "3":  8610000,
+  "2":  10960000,
+  "1":  11000000
 };
 
 // 死亡慰謝料モデル
@@ -106,7 +106,9 @@ function getLiapnizCoefficient(years, rate = 0.03) {
 function collectInputs() {
   return {
     status: document.getElementById("victimStatus").value,
+    modelPreset: document.getElementById("modelPreset").value,
     accidentDate: document.getElementById("accidentDate").value || "",
+    age: parseNumber(document.getElementById("age").value),
     annualIncome: parseNumber(document.getElementById("annualIncome").value),
 
     treatmentDays: parseNumber(document.getElementById("treatmentDays").value),
@@ -164,10 +166,10 @@ function validateInputs(inputs) {
     if (!inputs.annualIncome) {
       errors.push("死亡事故では基礎収入（年収）が必須です。");
     }
-    if (!inputs.deathWorkYears) {
-      errors.push("死亡事故では就労可能年数が必須です。");
+    if (!inputs.deathWorkYears && !(inputs.age > 0 && inputs.age < 80)) {
+      errors.push("死亡事故では就労可能年数を入力するか、年齢を入力してください。");
     }
-    if (!inputs.deathLifeRate && !inputs.deathSupportType) {
+    if (inputs.deathLifeRate === null && !inputs.deathSupportType) {
       errors.push("生活費控除率または扶養状況を入力してください。");
     }
   }
@@ -179,10 +181,7 @@ function validateInputs(inputs) {
 // エラー表示
 // ===============================
 function showErrors(errors) {
-  if (!errors || errors.length === 0) {
-    alertBox?.classList?.add("hidden");
-    return;
-  }
+  if (!errors || errors.length === 0) return;
   alert(errors.join("\n"));
 }
 
@@ -220,14 +219,17 @@ function calcCourtInjuryPain(treat, visit) {
   const hi = Math.ceil(months);
   const loBase = courtInjuryBaseTable[lo] || courtInjuryBaseTable[6];
   const hiBase = courtInjuryBaseTable[hi] || courtInjuryBaseTable[6];
-
   const base = loBase + (hiBase - loBase) * (months - lo);
 
   const freq = visit && treat ? visit / treat : 0;
-  let m = 0.8; // 中頻度
-  if (freq >= 0.4) m = 1.0;
-  else if (freq < 0.2) m = 0.6;
-
+  let m = 1.0;
+  if (freq >= 0.4) {
+    m = 1.1;          // 頻繁通院 → +10%
+  } else if (freq < 0.1) {
+    m = 0.8;          // ごく低頻度 → -20%
+  } else if (freq < 0.2) {
+    m = 0.9;          // 低頻度 → -10%
+  }
   return Math.round(base * m);
 }
 
@@ -244,10 +246,15 @@ function resolveLossRate(inputs) {
   const preset = gradeLossPreset[inputs.grade] || gradeLossPreset.none;
   return preset.rate / 100;
 }
+
 function resolveLossYears(inputs) {
   if (inputs.lossYears !== null) return inputs.lossYears;
   const preset = gradeLossPreset[inputs.grade] || gradeLossPreset.none;
-  return preset.years;
+  if (!(inputs.age > 0)) return preset.years;
+
+  const to67 = Math.max(0, 67 - inputs.age);
+  if (to67 === 0) return preset.years;
+  return Math.min(preset.years, to67);
 }
 
 // -----------------------
@@ -264,12 +271,29 @@ function calcLostEarningsCourt(annualIncome, lossRate, lossYears) {
 // -----------------------
 function resolveDeathLifeRate(inputs) {
   if (inputs.deathLifeRate !== null) return inputs.deathLifeRate / 100;
+
+  let base;
   switch (inputs.deathSupportType) {
-    case "none": return 0.4;
+    case "none":
+      base = 0.4;
+      break;
     case "one":
-    case "twoPlus": return 0.3;
-    default: return 0.0;
+    case "twoPlus":
+      base = 0.3;
+      break;
+    default:
+      base = 0.35;
   }
+
+  // 高齢者・低収入は控除率をやや低めに
+  if (inputs.age && inputs.age >= 65) {
+    base -= 0.05;
+  }
+  if (inputs.annualIncome && inputs.annualIncome < 3000000) {
+    base -= 0.05;
+  }
+
+  return Math.max(0.2, Math.min(0.5, base));
 }
 
 function resolveDeathPain(inputs) {
@@ -299,7 +323,7 @@ function applyPaid(total, paid) {
 }
 
 // -----------------------
-// 構成比
+// 構成比＋慰謝料レンジ
 // -----------------------
 function buildRatio(parts) {
   const total = parts.injury + parts.after + parts.lost + parts.other;
@@ -313,6 +337,14 @@ function buildRatio(parts) {
   };
 }
 
+// 後遺慰謝料のレンジ（代表額±10%）
+function getAfterPainRange(amount) {
+  if (!amount || amount <= 0) return null;
+  const min = Math.round(amount * 0.9);
+  const max = Math.round(amount * 1.1);
+  return { min, max };
+}
+
 // -----------------------
 // 結果をDOMに反映
 // -----------------------
@@ -320,46 +352,80 @@ function renderResult(result) {
   document.getElementById("resultSection").classList.remove("hidden");
   document.getElementById("detailResults").classList.remove("hidden");
 
+  const court = result.court;
+  const jibai = result.jibai;
+  const status = result.meta?.status || null;
+
   document.getElementById("courtNetAmount").textContent =
-    yenFormatter.format(result.court.afterPaid);
+    yenFormatter.format(court.afterPaid);
 
   document.getElementById("jibaiNetAmount").textContent =
-    yenFormatter.format(result.jibai.afterPaid);
+    yenFormatter.format(jibai.afterPaid);
 
-  document.getElementById("courtInjuryPain").textContent = yenFormatter.format(result.court.injuryPain);
-  document.getElementById("courtAfterPain").textContent = yenFormatter.format(result.court.afterPain);
-  document.getElementById("courtLostEarnings").textContent = yenFormatter.format(result.court.lostEarnings);
-  document.getElementById("courtLostWages").textContent = yenFormatter.format(result.court.lostWages);
-  document.getElementById("courtOtherCosts").textContent = yenFormatter.format(result.court.otherCosts);
-  document.getElementById("courtTotal").textContent = yenFormatter.format(result.court.total);
-  document.getElementById("courtAfterFault").textContent = yenFormatter.format(result.court.afterFault);
-  document.getElementById("courtAfterPaid").textContent = yenFormatter.format(result.court.afterPaid);
+  // 後遺慰謝料：代表額＋レンジ表示（後遺モードのとき）
+  const afterSpan = document.getElementById("courtAfterPain");
+  if (status === "after" && court.afterPain > 0) {
+    const range = getAfterPainRange(court.afterPain);
+    if (range) {
+      afterSpan.textContent =
+        `${yenFormatter.format(court.afterPain)}（目安レンジ：` +
+        `${yenFormatter.format(range.min)}〜${yenFormatter.format(range.max)}）`;
+    } else {
+      afterSpan.textContent = yenFormatter.format(court.afterPain);
+    }
+  } else {
+    afterSpan.textContent = yenFormatter.format(court.afterPain);
+  }
 
-  document.getElementById("courtRatioInjury").textContent = result.court.ratios.injury;
-  document.getElementById("courtRatioAfter").textContent = result.court.ratios.after;
-  document.getElementById("courtRatioLostEarnings").textContent = result.court.ratios.lost;
-  document.getElementById("courtRatioOther").textContent = result.court.ratios.other;
+  document.getElementById("courtInjuryPain").textContent =
+    yenFormatter.format(court.injuryPain);
+  document.getElementById("courtLostEarnings").textContent =
+    yenFormatter.format(court.lostEarnings);
+  document.getElementById("courtLostWages").textContent =
+    yenFormatter.format(court.lostWages);
+  document.getElementById("courtOtherCosts").textContent =
+    yenFormatter.format(court.otherCosts);
+  document.getElementById("courtTotal").textContent =
+    yenFormatter.format(court.total);
+  document.getElementById("courtAfterFault").textContent =
+    yenFormatter.format(court.afterFault);
+  document.getElementById("courtAfterPaid").textContent =
+    yenFormatter.format(court.afterPaid);
 
-  document.getElementById("jibaiInjuryPain").textContent = yenFormatter.format(result.jibai.injuryPain);
-  document.getElementById("jibaiAfterPain").textContent = yenFormatter.format(result.jibai.afterPain);
-  document.getElementById("jibaiLostWages").textContent = yenFormatter.format(result.jibai.lostWages);
-  document.getElementById("jibaiOtherCosts").textContent = yenFormatter.format(result.jibai.otherCosts);
-  document.getElementById("jibaiTotal").textContent = yenFormatter.format(result.jibai.total);
-  document.getElementById("jibaiAfterFault").textContent = yenFormatter.format(result.jibai.afterFault);
-  document.getElementById("jibaiAfterPaid").textContent = yenFormatter.format(result.jibai.afterPaid);
+  document.getElementById("courtRatioInjury").textContent = court.ratios.injury;
+  document.getElementById("courtRatioAfter").textContent = court.ratios.after;
+  document.getElementById("courtRatioLostEarnings").textContent = court.ratios.lost;
+  document.getElementById("courtRatioOther").textContent = court.ratios.other;
+
+  document.getElementById("jibaiInjuryPain").textContent =
+    yenFormatter.format(jibai.injuryPain);
+  document.getElementById("jibaiAfterPain").textContent =
+    yenFormatter.format(jibai.afterPain);
+  document.getElementById("jibaiLostWages").textContent =
+    yenFormatter.format(jibai.lostWages);
+  document.getElementById("jibaiOtherCosts").textContent =
+    yenFormatter.format(jibai.otherCosts);
+  document.getElementById("jibaiTotal").textContent =
+    yenFormatter.format(jibai.total);
+  document.getElementById("jibaiAfterFault").textContent =
+    yenFormatter.format(jibai.afterFault);
+  document.getElementById("jibaiAfterPaid").textContent =
+    yenFormatter.format(jibai.afterPaid);
 
   const capInfo = document.getElementById("jibaiCapInfo");
-  if (result.jibai.cap) {
-    if (result.jibai.total <= result.jibai.cap) {
-      capInfo.textContent = `自賠責限度額内（残り ${yenFormatter.format(result.jibai.cap - result.jibai.total)}）`;
+  if (jibai.cap) {
+    if (jibai.total <= jibai.cap) {
+      capInfo.textContent =
+        `自賠責限度額内（残り ${yenFormatter.format(jibai.cap - jibai.total)}）`;
     } else {
-      capInfo.textContent = `自賠責限度額超過（超過分 ${yenFormatter.format(result.jibai.total - result.jibai.cap)}）`;
+      capInfo.textContent =
+        `自賠責限度額超過（超過分 ${yenFormatter.format(jibai.total - jibai.cap)}）`;
     }
   } else {
     capInfo.textContent = "";
   }
 
-  updateCourtChart(result.court);
+  updateCourtChart(court);
 }
 
 // ===============================
@@ -374,7 +440,7 @@ function updateCourtChart(court) {
   const canvas = document.getElementById("courtChart");
   const legend = document.getElementById("chartLegend");
   const note = document.getElementById("chartNote");
-  if (!canvas || !legend) return;
+  if (!canvas || !legend || !section) return;
 
   const injury = court.injuryPain || 0;
   const after = court.afterPain || 0;
@@ -436,7 +502,8 @@ function updateCourtChart(court) {
   });
 
   if (note) {
-    note.textContent = `総損害額 ${yenFormatter.format(total)} の構成比を表示しています。`;
+    note.textContent =
+      `総損害額 ${yenFormatter.format(total)} の構成比を表示しています。`;
   }
 }
 
@@ -449,6 +516,13 @@ function calculateAll() {
   if (errors.length > 0) {
     showErrors(errors);
     return;
+  }
+
+  // 死亡：就労可能年数を年齢から自動補完（未入力の場合）
+  if (inputs.status === "death" && (!inputs.deathWorkYears || inputs.deathWorkYears <= 0)) {
+    if (inputs.age > 0 && inputs.age < 80) {
+      inputs.deathWorkYears = Math.max(0, 67 - inputs.age);
+    }
   }
 
   let courtInjury = 0,
@@ -531,6 +605,9 @@ function calculateAll() {
       afterFault: jibaiAfterFault,
       afterPaid: jibaiAfterPaid,
       cap: jibaiCap
+    },
+    meta: {
+      status: inputs.status
     }
   };
 
@@ -559,6 +636,61 @@ function updateInputVisibility() {
 }
 
 // -----------------------
+// 典型モデル適用
+// -----------------------
+const modelPresets = {
+  "after_14_30": {
+    status: "after",
+    age: 30,
+    annualIncome: 4000000,
+    grade: "14"
+  },
+  "after_12_40": {
+    status: "after",
+    age: 40,
+    annualIncome: 5000000,
+    grade: "12"
+  },
+  "after_9_30": {
+    status: "after",
+    age: 30,
+    annualIncome: 6000000,
+    grade: "9"
+  },
+  "death_40_dep": {
+    status: "death",
+    age: 40,
+    annualIncome: 5000000,
+    deathSupportType: "twoPlus",
+    deathWorkYears: 27,
+    deathPainPreset: "dependent"
+  }
+};
+
+function applyModelPreset(key) {
+  const preset = modelPresets[key];
+  if (!preset) return;
+
+  const setVal = (id, val) => {
+    if (val === undefined) return;
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+
+  if (preset.status) {
+    setVal("victimStatus", preset.status);
+    updateInputVisibility();
+  }
+
+  setVal("age", preset.age);
+  setVal("annualIncome", preset.annualIncome);
+  setVal("grade", preset.grade);
+  setVal("deathSupportType", preset.deathSupportType);
+  setVal("deathWorkYears", preset.deathWorkYears);
+  setVal("deathPainPreset", preset.deathPainPreset);
+}
+
+// -----------------------
 // 初期化
 // -----------------------
 document.addEventListener("DOMContentLoaded", () => {
@@ -572,4 +704,11 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       calculateAll();
     });
+
+  const presetSelect = document.getElementById("modelPreset");
+  if (presetSelect) {
+    presetSelect.addEventListener("change", (e) => {
+      applyModelPreset(e.target.value);
+    });
+  }
 });
