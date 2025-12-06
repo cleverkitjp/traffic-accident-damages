@@ -455,6 +455,134 @@ function renderResult(result) {
     if (range) {
       afterSpan.textContent =
         `${yenFormatter.format(court.afterPain)}（目安レンジ：` +
+// -----------------------
+// 結果をDOMに反映（前提条件を必ず表示する版）
+// -----------------------
+function renderResult(result) {
+  document.getElementById("resultSection").classList.remove("hidden");
+  document.getElementById("detailResults").classList.remove("hidden");
+
+  const court = result.court;
+  const jibai = result.jibai;
+
+  // 入力値（前提条件）は lastResult.inputs から直接参照する
+  const inputs = (lastResult && lastResult.inputs) ? lastResult.inputs : {};
+  const meta = result.meta || {};
+  const status = meta.status || inputs.status || null;
+
+  // ケース概要（前提条件の1行表示）
+  const caseSummaryEl = document.getElementById("caseSummary");
+  if (caseSummaryEl) {
+    const parts = [];
+
+    const statusLabelMap = {
+      injury: "傷害（入通院）",
+      after: "後遺障害",
+      death: "死亡事故"
+    };
+    const statusLabel = statusLabelMap[status] || "";
+
+    if (statusLabel) parts.push(statusLabel);
+
+    if (inputs.age) {
+      parts.push(`年齢 ${inputs.age}歳`);
+    }
+    if (inputs.annualIncome) {
+      parts.push(`基礎収入 ${yenFormatter.format(inputs.annualIncome)}／年`);
+    }
+
+    if (status === "injury" || status === "after") {
+      if (inputs.treatmentDays || inputs.visitDays || inputs.absenceDays) {
+        const t = inputs.treatmentDays ? `${inputs.treatmentDays}日` : "-";
+        const v = inputs.visitDays ? `${inputs.visitDays}日` : "-";
+        const a = inputs.absenceDays ? `${inputs.absenceDays}日` : "-";
+        parts.push(`治療期間 ${t}（実通院 ${v}／休業 ${a}）`);
+      }
+      if (status === "after" && inputs.grade && inputs.grade !== "none") {
+        parts.push(`後遺障害等級 ${inputs.grade}級`);
+      }
+    }
+
+    if (status === "death") {
+      const supportMap = {
+        none: "被扶養者なし",
+        one: "扶養1名",
+        twoPlus: "扶養2名以上"
+      };
+      if (inputs.deathSupportType) {
+        parts.push(`扶養状況：${supportMap[inputs.deathSupportType] || ""}`);
+      }
+      if (inputs.deathWorkYears) {
+        parts.push(`就労可能年数 約${inputs.deathWorkYears}年（67歳目安）`);
+      }
+      const lifeRate =
+        meta.deathLifeRate != null ? meta.deathLifeRate :
+        (result.meta && result.meta.deathLifeRate != null ? result.meta.deathLifeRate : null);
+      if (lifeRate != null) {
+        const pct = (lifeRate * 100).toFixed(1).replace(/\.0$/, "");
+        parts.push(`生活費控除率 約${pct}%（モデル）`);
+      }
+      if (inputs.funeralCost) {
+        parts.push(`葬儀費 ${yenFormatter.format(inputs.funeralCost)}`);
+      }
+    }
+
+    if (inputs.faultPercent || inputs.faultPercent === 0) {
+      parts.push(`過失（被害者側）${inputs.faultPercent}%`);
+    }
+    if (inputs.alreadyPaid) {
+      parts.push(`既払金 ${yenFormatter.format(inputs.alreadyPaid)}`);
+    }
+
+    // 何も拾えなかった場合でも、空行にならないようにする
+    caseSummaryEl.textContent =
+      parts.length > 0 ? parts.join("／") : "前提条件：入力値に基づくモデル計算";
+  }
+
+  // ここから下は従来どおり（合計額・明細・比率など）
+  document.getElementById("courtNetAmount").textContent =
+    yenFormatter.format(court.afterPaid);
+
+  document.getElementById("jibaiNetAmount").textContent =
+    yenFormatter.format(jibai.afterPaid);
+
+  const courtHint = document.getElementById("courtHint");
+  const jibaiHint = document.getElementById("jibaiHint");
+
+  if (courtHint) {
+    if (status === "injury") {
+      courtHint.textContent =
+        "通院慰謝料・休業損害・その他費用を合算し、過失相殺・既払金控除後の概算額です。";
+    } else if (status === "after") {
+      courtHint.textContent =
+        "傷害慰謝料＋後遺慰謝料＋逸失利益＋休業損害＋その他費用の合算から、過失・既払を控除した概算額です。";
+    } else if (status === "death") {
+      courtHint.textContent =
+        "死亡慰謝料＋逸失利益＋葬儀費等を合算し、生活費控除・過失・既払を反映した概算額です。";
+    } else {
+      courtHint.textContent = "";
+    }
+  }
+
+  if (jibaiHint) {
+    if (status === "injury" || status === "after") {
+      jibaiHint.textContent =
+        "傷害（および後遺障害）の自賠責基準による慰謝料・休業損害等を合算し、過失・既払を控除した概算額です。";
+    } else if (status === "death") {
+      jibaiHint.textContent =
+        "死亡自賠責の限度額（3000万円）を前提としたモデル計算の概算です。";
+    } else {
+      jibaiHint.textContent = "";
+    }
+  }
+
+  // 後遺慰謝料：代表額＋レンジ表示（後遺モードのとき）
+  const afterSpan = document.getElementById("courtAfterPain");
+  if (status === "after" && court.afterPain > 0) {
+    const range = getAfterPainRange(court.afterPain);
+    if (range) {
+      afterSpan.textContent =
+        `${yenFormatter.format(court.afterPain)}（目安レンジ：` +
         `${yenFormatter.format(range.min)}〜${yenFormatter.format(range.max)}）`;
     } else {
       afterSpan.textContent = yenFormatter.format(court.afterPain);
@@ -512,6 +640,7 @@ function renderResult(result) {
   }
 
   updateCourtChart(court);
+}
 }
 
 // ===============================
