@@ -86,6 +86,9 @@ const deathPainPreset = {
 const JIBAI_INJURY_CAP = 1200000;
 const JIBAI_DEATH_CAP = 3000000;
 
+// 直近の計算結果（コピー機能用）
+let lastResult = null;
+
 // ===============================
 // 基本ユーティリティ
 // ===============================
@@ -166,7 +169,7 @@ function validateInputs(inputs) {
     if (!inputs.annualIncome) {
       errors.push("死亡事故では基礎収入（年収）が必須です。");
     }
-    if (!inputs.deathWorkYears && !(inputs.age > 0 && inputs.age < 80)) {
+    if (inputs.deathWorkYears <= 0 && !(inputs.age > 0 && inputs.age < 80)) {
       errors.push("死亡事故では就労可能年数を入力するか、年齢を入力してください。");
     }
     if (inputs.deathLifeRate === null && !inputs.deathSupportType) {
@@ -426,7 +429,7 @@ function renderResult(result) {
   }
 
   updateCourtChart(court);
-}
+    }
 
 // ===============================
 // script.js  Part 3 / 3
@@ -611,6 +614,9 @@ function calculateAll() {
     }
   };
 
+  // コピー用に保存
+  lastResult = { inputs, result };
+
   renderResult(result);
 }
 
@@ -657,6 +663,12 @@ const modelPresets = {
     annualIncome: 6000000,
     grade: "9"
   },
+  "after_12_30": {
+    status: "after",
+    age: 30,
+    annualIncome: 4500000,
+    grade: "12"
+  },
   "death_40_dep": {
     status: "death",
     age: 40,
@@ -664,6 +676,14 @@ const modelPresets = {
     deathSupportType: "twoPlus",
     deathWorkYears: 27,
     deathPainPreset: "dependent"
+  },
+  "death_75_single": {
+    status: "death",
+    age: 75,
+    annualIncome: 3000000,
+    deathSupportType: "none",
+    deathWorkYears: 0,
+    deathPainPreset: "self"
   }
 };
 
@@ -691,6 +711,119 @@ function applyModelPreset(key) {
 }
 
 // -----------------------
+// 損害明細コピー機能
+// -----------------------
+function buildSummaryTextFromLastResult() {
+  if (!lastResult) return "";
+
+  const { inputs, result } = lastResult;
+  const court = result.court;
+  const jibai = result.jibai;
+
+  const statusLabelMap = {
+    injury: "傷害（入通院）",
+    after: "後遺障害",
+    death: "死亡事故"
+  };
+  const statusLabel = statusLabelMap[inputs.status] || "";
+
+  const lines = [];
+  lines.push("【交通事故損害概算（参考値・モデル計算）】");
+  if (statusLabel) lines.push(`事故類型：${statusLabel}`);
+  if (inputs.age) lines.push(`年齢：${inputs.age}歳`);
+  if (inputs.annualIncome) {
+    lines.push(`基礎収入：${yenFormatter.format(inputs.annualIncome)}／年`);
+  }
+  if (inputs.accidentDate) {
+    lines.push(`事故日：${inputs.accidentDate}`);
+  }
+  if (inputs.faultPercent || inputs.faultPercent === 0) {
+    lines.push(`過失割合（被害者側）：${inputs.faultPercent}%`);
+  }
+  if (inputs.alreadyPaid) {
+    lines.push(`既払金：${yenFormatter.format(inputs.alreadyPaid)}`);
+  }
+
+  lines.push("");
+  lines.push("＜裁判所基準モデル＞");
+  lines.push(`傷害慰謝料：${yenFormatter.format(court.injuryPain)}`);
+  lines.push(`後遺障害／死亡慰謝料：${yenFormatter.format(court.afterPain)}`);
+  lines.push(`逸失利益：${yenFormatter.format(court.lostEarnings)}`);
+  lines.push(`休業損害：${yenFormatter.format(court.lostWages)}`);
+  lines.push(`その他費用：${yenFormatter.format(court.otherCosts)}`);
+  lines.push(`総損害額：${yenFormatter.format(court.total)}`);
+  lines.push(`過失相殺後：${yenFormatter.format(court.afterFault)}`);
+  lines.push(`既払控除後（受取想定）：${yenFormatter.format(court.afterPaid)}`);
+
+  lines.push("");
+  lines.push("＜自賠責基準モデル＞");
+  lines.push(`傷害慰謝料：${yenFormatter.format(jibai.injuryPain)}`);
+  lines.push(`後遺障害慰謝料：${yenFormatter.format(jibai.afterPain)}`);
+  lines.push(`休業損害：${yenFormatter.format(jibai.lostWages)}`);
+  lines.push(`その他費用：${yenFormatter.format(jibai.otherCosts)}`);
+  lines.push(`総損害額：${yenFormatter.format(jibai.total)}`);
+  if (jibai.cap) {
+    lines.push(`自賠責限度額：${yenFormatter.format(jibai.cap)}`);
+  }
+  lines.push(`過失相殺後：${yenFormatter.format(jibai.afterFault)}`);
+  lines.push(`既払控除後（受取想定）：${yenFormatter.format(jibai.afterPaid)}`);
+
+  lines.push("");
+  lines.push("※本明細は公開されている目安額・モデル算式に基づく概算値であり、実際の解決額を保証するものではありません。");
+
+  return lines.join("\n");
+}
+
+function copySummaryToClipboard() {
+  if (!lastResult) {
+    alert("先に計算を実行してください。");
+    return;
+  }
+
+  const text = buildSummaryTextFromLastResult();
+  if (!text) {
+    alert("コピー可能な明細がありません。");
+    return;
+  }
+
+  const statusEl = document.getElementById("copyStatus");
+  const done = () => {
+    if (statusEl) {
+      statusEl.textContent = "損害明細をクリップボードにコピーしました。";
+      setTimeout(() => {
+        statusEl.textContent = "";
+      }, 3000);
+    } else {
+      alert("損害明細をコピーしました。");
+    }
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {
+      fallbackCopy(text, done);
+    });
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, callback) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand("copy");
+  } catch (e) {
+    console.error(e);
+  }
+  document.body.removeChild(textarea);
+  if (typeof callback === "function") callback();
+}
+
+// -----------------------
 // 初期化
 // -----------------------
 document.addEventListener("DOMContentLoaded", () => {
@@ -709,6 +842,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (presetSelect) {
     presetSelect.addEventListener("change", (e) => {
       applyModelPreset(e.target.value);
+    });
+  }
+
+  const copyBtn = document.getElementById("copySummaryButton");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      copySummaryToClipboard();
     });
   }
 });
