@@ -722,6 +722,15 @@ function calculateAll() {
   lastResult = { inputs, result };
 
   renderResult(result);
+  
+  // ===== 結果カードへ自動スクロール =====
+  const target = document.getElementById("resultSection");
+  if (target) {
+    setTimeout(() => {
+      target.scrollIntoView({ behavior: "smooth" });
+    }, 100); // DOM反映後にスクロールさせるため少し待つ
+  }
+}
 }
 
 // -----------------------
