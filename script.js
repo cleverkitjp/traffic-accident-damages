@@ -1,5 +1,57 @@
 // script.js  Part 1 / 3
 "use strict";
+// -----------------------
+// モデルプリセット適用
+// -----------------------
+function applyModelPreset(key) {
+  const el = (id) => document.getElementById(id);
+
+  switch (key) {
+    case "after_14_30":
+      el("victimStatus").value = "after";
+      el("age").value = 30;
+      el("annualIncome").value = 4000000;
+      el("grade").value = "14";
+      el("lossRate").value = "";     // 自動計算
+      el("lossYears").value = "";
+      el("otherCosts").value = 0;
+      el("faultPercent").value = 0;
+      el("alreadyPaid").value = 0;
+      break;
+
+    case "after_12_30":
+      el("victimStatus").value = "after";
+      el("age").value = 30;
+      el("annualIncome").value = 4500000;
+      el("grade").value = "12";
+      el("lossRate").value = "";
+      el("lossYears").value = "";
+      el("otherCosts").value = 0;
+      el("faultPercent").value = 0;
+      el("alreadyPaid").value = 0;
+      break;
+
+    case "death_40_dep":
+      el("victimStatus").value = "death";
+      el("age").value = 40;
+      el("annualIncome").value = 5000000;
+      el("deathSupportType").value = "twoPlus";
+      el("deathLifeRate").value = "";
+      el("deathWorkYears").value = "";
+      el("deathPainPreset").value = "dependent";
+      el("funeralCost").value = 1200000;
+      el("otherCosts").value = 0;
+      el("faultPercent").value = 0;
+      el("alreadyPaid").value = 0;
+      break;
+
+    default:
+      console.warn("Unknown preset:", key);
+  }
+
+  // 入力項目の表示切替
+  updateInputVisibility();
+}
 
 // 金額フォーマッタ
 const yenFormatter = new Intl.NumberFormat("ja-JP", {
