@@ -720,17 +720,20 @@ function calculateAll() {
   };
 
   lastResult = { inputs, result };
-
   renderResult(result);
-  
-  // ===== 結果カードへ自動スクロール =====
+  // ===== 結果カードへ自動スクロール（確実版） =====
   const target = document.getElementById("resultSection");
   if (target) {
     setTimeout(() => {
-      target.scrollIntoView({ behavior: "smooth" });
-    }, 100); // DOM反映後にスクロールさせるため少し待つ
+      const rect = target.getBoundingClientRect();
+      const y = rect.top + window.pageYOffset - 8; // 少しだけ余白
+      window.scrollTo({
+        top: y,
+        behavior: "smooth"
+      });
+    }, 300); // DOM描画が終わるのを少し待つ
   }
-}
+
 }
 
 // -----------------------
