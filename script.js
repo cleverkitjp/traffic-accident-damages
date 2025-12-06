@@ -10,7 +10,7 @@ const yenFormatter = new Intl.NumberFormat("ja-JP", {
   currency: "JPY"
 });
 
-// ライプニッツ係数（新係数・簡易）
+// ライプニッツ係数（新係数・簡易モデル）
 const LIFETIME_FACTORS = {
   1: 0.99, 2: 1.97, 3: 2.94, 4: 3.90, 5: 4.86,
   6: 5.80, 7: 6.74, 8: 7.66, 9: 8.58, 10: 9.48,
@@ -118,7 +118,6 @@ function validateInputs(inputs) {
 }
 
 function showErrors(errors) {
-  // エラー表示用の専用エリアはないので、必要なときだけアラート
   if (!errors.length) return;
   alert(errors.join("\n"));
 }
@@ -176,7 +175,7 @@ function calcCourtInjuryPain(treat, visit) {
   if (!treat) return 0;
   const effVisit = visit || 0;
   const useDays = Math.min(treat, effVisit * 2 || treat);
-  const base = Math.min(useDays * 4300 * 1.2, 1350000); // 「ざっくり赤本寄せ」モデル
+  const base = Math.min(useDays * 4300 * 1.2, 1350000);
   return Math.round(base);
 }
 
@@ -316,23 +315,66 @@ function renderResult(result) {
     caseSummaryEl.textContent = parts.join(" ／ ");
   }
 
+  // 死亡モデルの前提表示
+  const deathNoteEl = document.getElementById("deathModelNote");
+  if (deathNoteEl) {
+    if (meta.status === "death") {
+      const texts = [];
+      if (meta.deathSupportType) {
+        const map = {
+          none: "被扶養者なし",
+          one: "扶養1名",
+          twoPlus: "扶養2名以上"
+        };
+        texts.push(`扶養状況：${map[meta.deathSupportType] || ""}`);
+      }
+      if (meta.deathWorkYears) {
+        texts.push(`就労可能年数（モデル）：約${meta.deathWorkYears}年（67歳まで目安）`);
+      }
+      if (meta.deathLifeRate != null) {
+        const pct = (meta.deathLifeRate * 100).toFixed(1).replace(/\.0$/, "");
+        texts.push(`生活費控除率（モデル）：約${pct}%`);
+      }
+      deathNoteEl.textContent = texts.join(" ／ ");
+    } else {
+      deathNoteEl.textContent = "";
+    }
+  }
+
   const courtNetEl = document.getElementById("courtNetAmount");
   const courtHintEl = document.getElementById("courtHint");
   const jibaiNetEl = document.getElementById("jibaiNetAmount");
   const jibaiHintEl = document.getElementById("jibaiHint");
 
+  // 段階別金額表示用
+  const courtStepTotalEl = document.getElementById("courtStepTotal");
+  const courtStepFaultEl = document.getElementById("courtStepFault");
+  const courtStepPaidEl = document.getElementById("courtStepPaid");
+
+  const jibaiStepTotalEl = document.getElementById("jibaiStepTotal");
+  const jibaiStepFaultEl = document.getElementById("jibaiStepFault");
+  const jibaiStepPaidEl = document.getElementById("jibaiStepPaid");
+
   if (courtNetEl) courtNetEl.textContent = yenFormatter.format(court.afterPaid);
+  if (courtStepTotalEl) courtStepTotalEl.textContent = yenFormatter.format(court.total);
+  if (courtStepFaultEl) courtStepFaultEl.textContent = yenFormatter.format(court.afterFault);
+  if (courtStepPaidEl) courtStepPaidEl.textContent = yenFormatter.format(court.afterPaid);
+
   if (courtHintEl) {
     courtHintEl.textContent =
-      `裁判所基準モデル：総損害額 ${yenFormatter.format(court.total)} → 過失相殺後 ${yenFormatter.format(court.afterFault)} → 既払控除後（受取想定）`;
+      `裁判所基準モデル：総損害額 → 過失相殺 → 既払控除の順に計算した参考値です。`;
   }
 
   if (jibaiNetEl) jibaiNetEl.textContent = yenFormatter.format(jibai.afterPaid);
+  if (jibaiStepTotalEl) jibaiStepTotalEl.textContent = yenFormatter.format(jibai.total);
+  if (jibaiStepFaultEl) jibaiStepFaultEl.textContent = yenFormatter.format(jibai.afterFault);
+  if (jibaiStepPaidEl) jibaiStepPaidEl.textContent = yenFormatter.format(jibai.afterPaid);
+
   if (jibaiHintEl) {
     let capText = "";
     if (jibai.cap) capText = `（自賠責限度額 ${yenFormatter.format(jibai.cap)}）`;
     jibaiHintEl.textContent =
-      `自賠責基準モデル：総損害額 ${yenFormatter.format(jibai.total)} ${capText} → 過失相殺後 ${yenFormatter.format(jibai.afterFault)} → 既払控除後（受取想定）`;
+      `自賠責基準モデル：上限${capText}内で、総損害額 → 過失相殺 → 既払控除の順に計算した参考値です。`;
   }
 
   // --- 明細カード（裁判所基準） ---
@@ -534,7 +576,6 @@ function calculateAll() {
     jibaiCap = JIBAI_INJURY_CAP;
 
   } else if (inputs.status === "death") {
-    // 現時点では死亡自賠責の内訳詳細までは組み込まず、上限のみ表示
     jibaiCap = JIBAI_DEATH_CAP;
   }
 
@@ -581,7 +622,7 @@ function calculateAll() {
   lastResult = { inputs, result };
   renderResult(result);
 
-  // ===== 結果セクションへ自動スクロール（resultSection が画面上部付近に来る） =====
+  // 結果セクションへ自動スクロール
   setTimeout(() => {
     const target = document.getElementById("resultSection");
     if (!target) return;
