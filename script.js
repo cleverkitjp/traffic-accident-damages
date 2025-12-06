@@ -1,509 +1,357 @@
-// ===============================
-// script.js  Part 1 / 3
-// ===============================
+"use strict";
 
-// -----------------------
-// 定数・ユーティリティ
-// -----------------------
+// =====================================
+// 共通定数・ユーティリティ
+// =====================================
+
 const yenFormatter = new Intl.NumberFormat("ja-JP", {
   style: "currency",
   currency: "JPY"
 });
 
-// ライプニッツ係数（新係数・簡易モデル）
-const LIFETIME_FACTORS = {
-  1: 0.99, 2: 1.97, 3: 2.94, 4: 3.90, 5: 4.86,
-  6: 5.80, 7: 6.74, 8: 7.66, 9: 8.58, 10: 9.48,
-  11: 10.38, 12: 11.26, 13: 12.14, 14: 13.00, 15: 13.86,
-  20: 18.41, 25: 22.89, 30: 27.31, 35: 31.66, 40: 35.95
-};
+const percentFormatter = new Intl.NumberFormat("ja-JP", {
+  maximumFractionDigits: 1
+});
 
-// 数値入力取得ヘルパ
-function readNumber(id) {
-  const el = document.getElementById(id);
-  if (!el) return null;
-  const v = el.value.trim();
-  if (v === "") return null;
-  const n = Number(v.replace(/,/g, ""));
-  return isNaN(n) ? null : n;
+// 割引率（中間利率の簡易モデル）
+const DISCOUNT_RATE = 0.03;
+
+// 自賠責の簡易上限（モデル）
+const JIBAI_INJURY_CAP = 1200000;   // 傷害・後遺（傷害部分）上限イメージ
+const JIBAI_DEATH_CAP  = 30000000;  // 死亡自賠責限度額イメージ
+
+let lastResult = null;
+
+// -----------------------
+// DOMユーティリティ
+// -----------------------
+function getEl(id) {
+  return document.getElementById(id);
+}
+
+function getNumberValue(id) {
+  const el = getEl(id);
+  if (!el) return 0;
+  const raw = (el.value || "").toString().replace(/,/g, "");
+  if (raw === "") return 0;
+  const n = Number(raw);
+  return isNaN(n) ? 0 : n;
+}
+
+function getStringValue(id) {
+  const el = getEl(id);
+  if (!el) return "";
+  return (el.value || "").toString();
 }
 
 // -----------------------
-// 入力収集・バリデーション
+// ライプニッツ係数（簡易）
 // -----------------------
+function calcLumpSumFactor(years) {
+  const n = Number(years);
+  if (!n || n <= 0) return 0;
+  const r = DISCOUNT_RATE;
+  // 年金現価係数の単純式
+  return (1 - Math.pow(1 + r, -n)) / r;
+}
+
+// -----------------------
+// 過失・既払処理
+// -----------------------
+function applyFault(amount, faultPercent) {
+  const base = Number(amount) || 0;
+  const fault = Number(faultPercent) || 0;
+  const ratio = Math.max(0, Math.min(100, 100 - fault));
+  return Math.max(0, Math.round((base * ratio) / 100));
+}
+
+function applyPaid(amount, alreadyPaid) {
+  const base = Number(amount) || 0;
+  const paid = Number(alreadyPaid) || 0;
+  return Math.max(0, Math.round(base - paid));
+}
+
+// -----------------------
+// 等級 → 後遺慰謝料（裁判所基準モデル）
+// -----------------------
+const COURT_AFTER_PAIN_TABLE = {
+  "1": 28000000,
+  "2": 23000000,
+  "3": 20000000,
+  "4": 17000000,
+  "5": 14000000,
+  "6": 12000000,
+  "7": 10000000,
+  "8": 8300000,
+  "9": 6900000,
+  "10": 5500000,
+  "11": 4200000,
+  "12": 2900000,
+  "13": 1800000,
+  "14": 1100000
+};
+
+// -----------------------
+// 等級 → 後遺慰謝料（自賠責モデル）
+// -----------------------
+const JIBAI_AFTER_PAIN_TABLE = {
+  "1": 11500000,
+  "2": 9980000,
+  "3": 8610000,
+  "4": 7370000,
+  "5": 6180000,
+  "6": 5120000,
+  "7": 4190000,
+  "8": 3310000,
+  "9": 2490000,
+  "10": 1900000,
+  "11": 1360000,
+  "12": 940000,
+  "13": 570000,
+  "14": 320000
+};
+
+// -----------------------
+// 等級 → 喪失率（裁判所モデル）
+// -----------------------
+const LOSS_RATE_TABLE = {
+  "1": 1.00,
+  "2": 1.00,
+  "3": 1.00,
+  "4": 0.92,
+  "5": 0.79,
+  "6": 0.67,
+  "7": 0.56,
+  "8": 0.45,
+  "9": 0.35,
+  "10": 0.27,
+  "11": 0.20,
+  "12": 0.14,
+  "13": 0.09,
+  "14": 0.05
+};
+
+// -----------------------
+// 傷害慰謝料（裁判所基準・簡易）
+// -----------------------
+function calcCourtInjuryPain(treatmentDays, visitDays) {
+  const t = Number(treatmentDays) || 0;
+  const v = Number(visitDays) || 0;
+  if (!t && !v) return 0;
+
+  const baseDays = Math.min(t, 180);
+  const points = Math.max(baseDays, v * 2); // 通院日数×2 のイメージ
+  const amount = points * 4300;
+  return Math.min(1350000, Math.round(amount));
+}
+
+// -----------------------
+// 傷害慰謝料（自賠責基準・簡易）
+// -----------------------
+function calcJibaiInjuryPain(treatmentDays, visitDays) {
+  const t = Number(treatmentDays) || 0;
+  const v = Number(visitDays) || 0;
+  if (!t && !v) return 0;
+
+  const days = Math.min(t, 120);
+  const amount = days * 4300;
+  return Math.round(Math.min(amount, JIBAI_INJURY_CAP));
+}
+
+// -----------------------
+// 後遺慰謝料（裁判所）
+// -----------------------
+function calcCourtAfterPain(grade) {
+  if (!grade || grade === "none") return 0;
+  return COURT_AFTER_PAIN_TABLE[grade] || 0;
+}
+
+// -----------------------
+// 後遺慰謝料（自賠責）
+// -----------------------
+function calcJibaiAfterPain(grade) {
+  if (!grade || grade === "none") return 0;
+  return JIBAI_AFTER_PAIN_TABLE[grade] || 0;
+}
+
+// -----------------------
+// 喪失率・喪失期間の解決
+// -----------------------
+function resolveLossRate(inputs) {
+  if (inputs.lossRateManual != null && inputs.lossRateManual > 0) {
+    return Math.min(1, inputs.lossRateManual / 100);
+  }
+  if (inputs.grade && LOSS_RATE_TABLE[inputs.grade]) {
+    return LOSS_RATE_TABLE[inputs.grade];
+  }
+  return 0;
+}
+
+function resolveLossYears(inputs) {
+  if (inputs.lossYearsManual != null && inputs.lossYearsManual > 0) {
+    return inputs.lossYearsManual;
+  }
+  const age = inputs.age || 0;
+  if (age > 0 && age < 67) {
+    return 67 - age;
+  }
+  return 5; // 67歳超などの簡易モデル
+}
+
+// -----------------------
+// 逸失利益（裁判所）
+// -----------------------
+function calcLostEarningsCourt(annualIncome, lossRate, lossYears) {
+  if (!annualIncome || !lossRate || !lossYears) return 0;
+  const factor = calcLumpSumFactor(lossYears);
+  const amount = annualIncome * lossRate * factor;
+  return Math.round(amount);
+}
+
+// -----------------------
+// 死亡慰謝料（裁判所・プリセット）
+// -----------------------
+function resolveDeathPain(inputs) {
+  const preset = inputs.deathPainPreset;
+  if (preset === "custom") {
+    return inputs.deathPainCustom || 0;
+  }
+  if (preset === "self") {
+    return 29000000;
+  }
+  if (preset === "dependent") {
+    return 35000000;
+  }
+  return 0;
+}
+
+// -----------------------
+// 生活費控除率（死亡）
+// -----------------------
+function resolveDeathLifeRate(inputs) {
+  if (inputs.deathLifeRateManual != null && inputs.deathLifeRateManual >= 0) {
+    return Math.max(0, Math.min(1, inputs.deathLifeRateManual / 100));
+  }
+  switch (inputs.deathSupportType) {
+    case "none":     // 被扶養者なし
+      return 0.40;
+    case "one":      // 扶養1名
+      return 0.30;
+    case "twoPlus":  // 扶養2名以上
+      return 0.30;
+    default:
+      return 0.35;
+  }
+}
+
+// -----------------------
+// 就労可能年数（死亡）
+// -----------------------
+function resolveDeathWorkYears(inputs) {
+  if (inputs.deathWorkYearsManual != null && inputs.deathWorkYearsManual > 0) {
+    return inputs.deathWorkYearsManual;
+  }
+  const age = inputs.age || 0;
+  if (age > 0 && age < 67) {
+    return 67 - age;
+  }
+  return 5;
+}
+
+// ===============================
+// 入力値の収集
+// ===============================
 function collectInputs() {
-  const getVal = (id) => {
-    const el = document.getElementById(id);
-    return el ? el.value.trim() : "";
-  };
+  const status = getStringValue("victimStatus");
 
   const inputs = {
-    status: getVal("victimStatus"),   // injury / after / death
-    accidentDate: getVal("accidentDate") || "",
+    status: status,
+    accidentDate: getStringValue("accidentDate"),
+    age: getNumberValue("age"),
+    annualIncome: getNumberValue("annualIncome"),
 
-    age: readNumber("age"),
-    annualIncome: readNumber("annualIncome"),
+    // 傷害・休業損害
+    treatmentDays: getNumberValue("treatmentDays"),
+    visitDays: getNumberValue("visitDays"),
+    absenceDays: getNumberValue("absenceDays"),
+    dailyIncome: getNumberValue("dailyIncome"),
 
-    treatmentDays: readNumber("treatmentDays"),
-    visitDays: readNumber("visitDays"),
-    absenceDays: readNumber("absenceDays"),
-    dailyIncome: readNumber("dailyIncome"),
+    // 後遺
+    grade: getStringValue("grade"),
+    lossRateManual: getNumberValue("lossRate"),
+    lossYearsManual: getNumberValue("lossYears"),
 
-    grade: getVal("grade"),
-    lossRateInput: readNumber("lossRate"),   // % 指定
-    lossYearsInput: readNumber("lossYears"),
+    // 死亡
+    deathSupportType: getStringValue("deathSupportType"),
+    deathLifeRateManual: getNumberValue("deathLifeRate"),
+    deathWorkYearsManual: getNumberValue("deathWorkYears"),
+    deathPainPreset: getStringValue("deathPainPreset"),
+    deathPainCustom: getNumberValue("deathPainCustom"),
+    funeralCost: getNumberValue("funeralCost"),
 
-    faultPercent: readNumber("faultPercent"),
-    alreadyPaid: readNumber("alreadyPaid"),
-    otherCosts: readNumber("otherCosts"),
-
-    // 死亡事故関連
-    deathSupportType: getVal("deathSupportType"),   // none / one / twoPlus
-    deathLifeRateInput: readNumber("deathLifeRate"), // % 指定
-    deathWorkYears: readNumber("deathWorkYears"),
-    deathPainPreset: getVal("deathPainPreset"),     // self / dependent / custom
-    deathPainCustom: readNumber("deathPainCustom"),
-    funeralCost: readNumber("funeralCost")
+    // その他
+    otherCosts: getNumberValue("otherCosts"),
+    faultPercent: getNumberValue("faultPercent"),
+    alreadyPaid: getNumberValue("alreadyPaid")
   };
-
-  // 生活費控除率（0〜1に変換）
-  if (inputs.deathLifeRateInput != null) {
-    inputs.deathLifeRate = inputs.deathLifeRateInput / 100;
-  } else {
-    inputs.deathLifeRate = null;
-  }
 
   return inputs;
 }
 
+// -----------------------
+// 簡易バリデーション
+// -----------------------
 function validateInputs(inputs) {
   const errors = [];
 
   if (!inputs.status) {
     errors.push("事故類型を選択してください。");
   }
+  if (!inputs.age || inputs.age <= 0) {
+    errors.push("年齢を正しく入力してください。");
+  }
+  if (!inputs.annualIncome || inputs.annualIncome < 0) {
+    errors.push("基礎収入（年収）を正しく入力してください。");
+  }
 
-  if (inputs.status === "after" || inputs.status === "death") {
-    if (!inputs.age || inputs.age <= 0) {
-      errors.push("年齢を入力してください。");
-    }
-    if (!inputs.annualIncome || inputs.annualIncome <= 0) {
-      errors.push("基礎収入（年収）を入力してください。");
+  // 後遺・傷害では、治療期間・通院日数・休業日数のいずれかはあった方がよい
+  if (inputs.status === "injury" || inputs.status === "after") {
+    if (!inputs.treatmentDays && !inputs.visitDays && !inputs.absenceDays) {
+      errors.push("治療期間・実通院日数・休業日数のいずれかを入力してください。");
     }
   }
 
-  if (inputs.status === "after") {
-    if (!inputs.grade || inputs.grade === "none") {
-      errors.push("後遺障害等級を選択してください。");
-    }
-  }
-
+  // 死亡事故では扶養状況を入れてもらう
   if (inputs.status === "death") {
     if (!inputs.deathSupportType) {
-      errors.push("生活費控除方式（扶養状況）を選択してください。");
+      errors.push("死亡事故の場合は、生活費控除方式（扶養状況）を選択してください。");
     }
-  }
-
-  if (inputs.deathLifeRate != null &&
-      (inputs.deathLifeRate < 0 || inputs.deathLifeRate > 1)) {
-    errors.push("生活費控除率は0〜100%の範囲で入力してください。");
-  }
-
-  if (inputs.faultPercent != null &&
-      (inputs.faultPercent < 0 || inputs.faultPercent > 100)) {
-    errors.push("過失割合（被害者側）は0〜100の範囲で入力してください。");
   }
 
   return errors;
 }
 
 function showErrors(errors) {
-  if (!errors.length) return;
-  alert(errors.join("\n"));
-}
+  if (!errors || errors.length === 0) return;
+  const box = getEl("errorBox");
+  const list = getEl("errorList");
 
-// -----------------------
-// 算定ロジック
-// -----------------------
-
-// 労働能力喪失率（代表値＋任意入力）
-function resolveLossRate(inputs) {
-  if (inputs.lossRateInput != null && inputs.lossRateInput >= 0) {
-    return inputs.lossRateInput / 100;
-  }
-  const table = {
-    "1": 1.0, "2": 1.0, "3": 1.0, "4": 0.92,
-    "5": 0.79, "6": 0.67, "7": 0.56, "8": 0.45,
-    "9": 0.35, "10": 0.27, "11": 0.20, "12": 0.14,
-    "13": 0.09, "14": 0.05
-  };
-  return table[inputs.grade] || 0;
-}
-
-// 喪失期間（モデル：67歳まで＋任意入力）
-function resolveLossYears(inputs) {
-  if (inputs.lossYearsInput != null && inputs.lossYearsInput > 0) {
-    return inputs.lossYearsInput;
-  }
-  if (!inputs.age) return 0;
-  const y = 67 - inputs.age;
-  return Math.max(0, Math.min(y, 40));
-}
-
-// ライプニッツ係数
-function getFactor(years) {
-  if (years <= 0) return 0;
-  if (LIFETIME_FACTORS[years]) return LIFETIME_FACTORS[years];
-
-  let nearest = 40;
-  for (const k of Object.keys(LIFETIME_FACTORS)) {
-    const num = Number(k);
-    if (Math.abs(num - years) < Math.abs(nearest - years)) nearest = num;
-  }
-  return LIFETIME_FACTORS[nearest];
-}
-
-// 逸失利益（裁判所）
-function calcLostEarningsCourt(income, lossRate, years) {
-  if (!income || !lossRate || !years) return 0;
-  const factor = getFactor(years);
-  return Math.round(income * lossRate * factor);
-}
-
-// 入通院慰謝料（裁判所基準・簡易モデル）
-function calcCourtInjuryPain(treat, visit) {
-  if (!treat) return 0;
-  const effVisit = visit || 0;
-  const useDays = Math.min(treat, effVisit * 2 || treat);
-  const base = Math.min(useDays * 4300 * 1.2, 1350000);
-  return Math.round(base);
-}
-
-// 後遺障害慰謝料（裁判所基準）
-function calcCourtAfterPain(grade) {
-  const table = {
-    "1": 28000000, "2": 23700000, "3": 19900000, "4": 16700000,
-    "5": 14000000, "6": 11800000, "7": 10000000, "8": 8300000,
-    "9": 6900000, "10": 5500000, "11": 4200000, "12": 2900000,
-    "13": 1800000, "14": 1100000
-  };
-  return table[grade] || 0;
-}
-
-// 自賠責：入通院慰謝料（簡易）
-function calcJibaiInjuryPain(treatDays, visitDays) {
-  if (!treatDays) return 0;
-  const v = visitDays || 0;
-  const n = Math.min(treatDays, v * 2 || treatDays);
-  return n * 4300;
-}
-
-// 自賠責：後遺障害慰謝料
-function calcJibaiAfterPain(grade) {
-  const table = {
-    "1": 1150000, "2": 998000, "3": 861000, "4": 738000,
-    "5": 618000, "6": 503000, "7": 403000, "8": 302000,
-    "9": 245000, "10": 190000, "11": 136000, "12": 93000,
-    "13": 57000, "14": 32000
-  };
-  return table[grade] || 0;
-}
-
-// 自賠責：休業損害
-function calcJibaiLostWages(dailyIncome, days) {
-  if (!dailyIncome || !days) return 0;
-  return dailyIncome * days;
-}
-
-// 自賠責限度額
-const JIBAI_INJURY_CAP = 1200000;
-const JIBAI_DEATH_CAP = 3000000;
-
-// 過失相殺
-function applyFault(amount, percent) {
-  if (!percent && percent !== 0) return amount;
-  return Math.max(0, Math.round(amount * (1 - percent / 100)));
-}
-
-// 既払控除
-function applyPaid(amount, paid) {
-  if (!paid) return amount;
-  return Math.max(0, amount - paid);
-}
-
-// 死亡事故：慰謝料（裁判所モデル）
-function resolveDeathPain(inputs) {
-  if (inputs.deathPainPreset === "custom" && inputs.deathPainCustom && inputs.deathPainCustom > 0) {
-    return inputs.deathPainCustom;
-  }
-  switch (inputs.deathPainPreset) {
-    case "dependent":
-      return 35000000; // 一家の支柱モデル
-    case "self":
-      return 29000000; // 本人のみモデル
-    default:
-      return 32000000; // 中間的モデル
-  }
-}
-
-// 死亡事故：生活費控除率
-function resolveDeathLifeRate(inputs) {
-  if (inputs.deathLifeRate != null && inputs.deathLifeRate >= 0) {
-    return inputs.deathLifeRate;
-  }
-  switch (inputs.deathSupportType) {
-    case "none": return 0.4;
-    case "one": return 0.3;
-    case "twoPlus": return 0.2;
-    default: return 0.3;
-  }
-}
-
-// 死亡事故：逸失利益
-function calcDeathLostEarnings(income, lifeRate, workYears) {
-  if (!income || !workYears) return 0;
-  const factor = getFactor(workYears);
-  return Math.round(income * (1 - lifeRate) * factor);
-}
-
-// 比率カード用
-function buildRatio(obj) {
-  const total = obj.injury + obj.after + obj.lost + obj.other;
-  if (!total) return { injury: 0, after: 0, lost: 0, other: 0 };
-  return {
-    injury: obj.injury / total,
-    after: obj.after / total,
-    lost: obj.lost / total,
-    other: obj.other / total
-  };
-}
-
-let lastResult = null;
-
-// ===============================
-// script.js  Part 2 / 3
-// ===============================
-
-// -----------------------
-// 結果描画
-// -----------------------
-function renderResult(result) {
-  const summarySection = document.getElementById("resultSection");
-  const detailSection = document.getElementById("detailResults");
-  if (summarySection) summarySection.classList.remove("hidden");
-  if (detailSection) detailSection.classList.remove("hidden");
-
-  const court = result.court;
-  const jibai = result.jibai;
-  const meta = result.meta;
-
-  // --- サマリーカード ---
-  const statusLabelMap = {
-    injury: "傷害（入通院）",
-    after: "後遺障害",
-    death: "死亡事故"
-  };
-  const statusLabel = statusLabelMap[meta.status] || "";
-
-  const caseSummaryEl = document.getElementById("caseSummary");
-  if (caseSummaryEl) {
-    const parts = [];
-    if (statusLabel) parts.push(statusLabel);
-    if (meta.age) parts.push(`${meta.age}歳`);
-    if (meta.annualIncome) parts.push(`年収 ${yenFormatter.format(meta.annualIncome)}`);
-    if (meta.grade && meta.status === "after") parts.push(`後遺障害 ${meta.grade}級`);
-    caseSummaryEl.textContent = parts.join(" ／ ");
-  }
-
-  // 死亡モデルの前提表示
-  const deathNoteEl = document.getElementById("deathModelNote");
-  if (deathNoteEl) {
-    if (meta.status === "death") {
-      const texts = [];
-      if (meta.deathSupportType) {
-        const map = {
-          none: "被扶養者なし",
-          one: "扶養1名",
-          twoPlus: "扶養2名以上"
-        };
-        texts.push(`扶養状況：${map[meta.deathSupportType] || ""}`);
-      }
-      if (meta.deathWorkYears) {
-        texts.push(`就労可能年数（モデル）：約${meta.deathWorkYears}年（67歳まで目安）`);
-      }
-      if (meta.deathLifeRate != null) {
-        const pct = (meta.deathLifeRate * 100).toFixed(1).replace(/\.0$/, "");
-        texts.push(`生活費控除率（モデル）：約${pct}%`);
-      }
-      deathNoteEl.textContent = texts.join(" ／ ");
-    } else {
-      deathNoteEl.textContent = "";
-    }
-  }
-
-  const courtNetEl = document.getElementById("courtNetAmount");
-  const courtHintEl = document.getElementById("courtHint");
-  const jibaiNetEl = document.getElementById("jibaiNetAmount");
-  const jibaiHintEl = document.getElementById("jibaiHint");
-
-  // 段階別金額表示用
-  const courtStepTotalEl = document.getElementById("courtStepTotal");
-  const courtStepFaultEl = document.getElementById("courtStepFault");
-  const courtStepPaidEl = document.getElementById("courtStepPaid");
-
-  const jibaiStepTotalEl = document.getElementById("jibaiStepTotal");
-  const jibaiStepFaultEl = document.getElementById("jibaiStepFault");
-  const jibaiStepPaidEl = document.getElementById("jibaiStepPaid");
-
-  if (courtNetEl) courtNetEl.textContent = yenFormatter.format(court.afterPaid);
-  if (courtStepTotalEl) courtStepTotalEl.textContent = yenFormatter.format(court.total);
-  if (courtStepFaultEl) courtStepFaultEl.textContent = yenFormatter.format(court.afterFault);
-  if (courtStepPaidEl) courtStepPaidEl.textContent = yenFormatter.format(court.afterPaid);
-
-  if (courtHintEl) {
-    courtHintEl.textContent =
-      `裁判所基準モデル：総損害額 → 過失相殺 → 既払控除の順に計算した参考値です。`;
-  }
-
-  if (jibaiNetEl) jibaiNetEl.textContent = yenFormatter.format(jibai.afterPaid);
-  if (jibaiStepTotalEl) jibaiStepTotalEl.textContent = yenFormatter.format(jibai.total);
-  if (jibaiStepFaultEl) jibaiStepFaultEl.textContent = yenFormatter.format(jibai.afterFault);
-  if (jibaiStepPaidEl) jibaiStepPaidEl.textContent = yenFormatter.format(jibai.afterPaid);
-
-  if (jibaiHintEl) {
-    let capText = "";
-    if (jibai.cap) capText = `（自賠責限度額 ${yenFormatter.format(jibai.cap)}）`;
-    jibaiHintEl.textContent =
-      `自賠責基準モデル：上限${capText}内で、総損害額 → 過失相殺 → 既払控除の順に計算した参考値です。`;
-  }
-
-  // --- 明細カード（裁判所基準） ---
-  const setText = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  };
-
-  setText("courtInjuryPain", yenFormatter.format(court.injuryPain));
-  setText("courtAfterPain", yenFormatter.format(court.afterPain));
-  setText("courtLostEarnings", yenFormatter.format(court.lostEarnings));
-  setText("courtLostWages", yenFormatter.format(court.lostWages));
-  setText("courtOtherCosts", yenFormatter.format(court.otherCosts));
-  setText("courtTotal", yenFormatter.format(court.total));
-  setText("courtAfterFault", yenFormatter.format(court.afterFault));
-  setText("courtAfterPaid", yenFormatter.format(court.afterPaid));
-
-  if (court.ratios) {
-    const r = court.ratios;
-    setText("courtRatioInjury", (r.injury * 100).toFixed(1) + "%");
-    setText("courtRatioAfter", (r.after * 100).toFixed(1) + "%");
-    setText("courtRatioLostEarnings", (r.lost * 100).toFixed(1) + "%");
-    setText("courtRatioOther", (r.other * 100).toFixed(1) + "%");
-  }
-
-  // --- 明細カード（自賠責基準） ---
-  setText("jibaiInjuryPain", yenFormatter.format(jibai.injuryPain));
-  setText("jibaiAfterPain", yenFormatter.format(jibai.afterPain));
-  setText("jibaiLostWages", yenFormatter.format(jibai.lostWages));
-  setText("jibaiOtherCosts", yenFormatter.format(jibai.otherCosts));
-  setText("jibaiTotal", yenFormatter.format(jibai.total));
-  setText("jibaiAfterFault", yenFormatter.format(jibai.afterFault));
-  setText("jibaiAfterPaid", yenFormatter.format(jibai.afterPaid));
-
-  const capInfoEl = document.getElementById("jibaiCapInfo");
-  if (capInfoEl) {
-    if (jibai.cap) {
-      capInfoEl.textContent = `※自賠責限度額は ${yenFormatter.format(jibai.cap)} です。`;
-    } else {
-      capInfoEl.textContent = "";
-    }
-  }
-
-  // 円グラフ更新
-  updateCourtChart(court);
-}
-
-// -----------------------
-// 円グラフ描画
-// -----------------------
-function updateCourtChart(court) {
-  const section = document.getElementById("chartSection");
-  const canvas = document.getElementById("courtChart");
-  const legend = document.getElementById("chartLegend");
-  const note = document.getElementById("chartNote");
-  if (!canvas || !legend || !section) return;
-
-  const injury = court.injuryPain || 0;
-  const after = court.afterPain || 0;
-  const lost = court.lostEarnings || 0;
-  const other = (court.lostWages || 0) + (court.otherCosts || 0);
-  const total = injury + after + lost + other;
-
-  if (!total) {
-    section.classList.add("hidden");
-    legend.innerHTML = "";
-    if (note) note.textContent = "裁判所基準の総損害額が0円のため表示しません。";
-    return;
-  }
-
-  section.classList.remove("hidden");
-
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-
-  const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 10;
-
-  const parts = [
-    { label: "傷害慰謝料", value: injury, color: "#60a5fa" },
-    { label: "後遺/死亡慰謝料", value: after, color: "#f97373" },
-    { label: "逸失利益", value: lost, color: "#22c55e" },
-    { label: "その他", value: other, color: "#facc15" }
-  ].filter(p => p.value > 0);
-
-  let start = -Math.PI / 2;
-
-  parts.forEach(p => {
-    const angle = (p.value / total) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, start, start + angle);
-    ctx.closePath();
-    ctx.fillStyle = p.color;
-    ctx.fill();
-    start += angle;
-  });
-
-  legend.innerHTML = "";
-  parts.forEach(p => {
-    const pct = (p.value / total * 100).toFixed(1) + "%";
-    const item = document.createElement("div");
-    item.className = "chart-legend-item";
-
-    const box = document.createElement("span");
-    box.className = "chart-legend-color";
-    box.style.backgroundColor = p.color;
-
-    const label = document.createElement("span");
-    label.textContent = `${p.label}：${yenFormatter.format(p.value)}（${pct}）`;
-
-    item.appendChild(box);
-    item.appendChild(label);
-    legend.appendChild(item);
-  });
-
-  if (note) {
-    note.textContent =
-      `総損害額 ${yenFormatter.format(total)} の構成比を表示しています。`;
+  if (box && list) {
+    list.innerHTML = "";
+    errors.forEach(msg => {
+      const li = document.createElement("li");
+      li.textContent = msg;
+      list.appendChild(li);
+    });
+    box.classList.remove("hidden");
+  } else {
+    alert(errors.join("\n"));
   }
 }
 
 // ===============================
-// script.js  Part 3 / 3
-// ===============================
-
-// -----------------------
 // メイン計算
-// -----------------------
+// ===============================
 function calculateAll() {
   const inputs = collectInputs();
   const errors = validateInputs(inputs);
@@ -512,26 +360,22 @@ function calculateAll() {
     return;
   }
 
-  // 死亡事故：就労可能年数の自動補完
-  if (inputs.status === "death" && (!inputs.deathWorkYears || inputs.deathWorkYears <= 0)) {
-    if (inputs.age > 0 && inputs.age < 80) {
-      inputs.deathWorkYears = Math.max(0, 67 - inputs.age);
-    } else {
-      inputs.deathWorkYears = 0;
-    }
-  }
+  // エラーボックスがあれば消す
+  const box = getEl("errorBox");
+  if (box) box.classList.add("hidden");
 
-  let courtInjury = 0,
-      courtAfter = 0,
-      courtLost = 0,
-      courtLostWages = 0,
-      courtOther = inputs.otherCosts || 0;
-
-  let deathLifeRateUsed = null;
+  // 裁判所基準
+  let courtInjury = 0;
+  let courtAfter = 0;
+  let courtLost = 0;
+  let courtLostWages = 0;
+  let courtOther = inputs.otherCosts || 0;
 
   if (inputs.status === "injury" || inputs.status === "after") {
+    // 傷害慰謝料
     courtInjury = calcCourtInjuryPain(inputs.treatmentDays, inputs.visitDays);
 
+    // 後遺慰謝料＋逸失利益
     if (inputs.status === "after") {
       courtAfter = calcCourtAfterPain(inputs.grade);
       const lossRate = resolveLossRate(inputs);
@@ -539,49 +383,61 @@ function calculateAll() {
       courtLost = calcLostEarningsCourt(inputs.annualIncome, lossRate, lossYears);
     }
 
-    if (inputs.absenceDays && inputs.dailyIncome) {
-      courtLostWages = inputs.dailyIncome * inputs.absenceDays;
+    // 休業損害
+    if (inputs.dailyIncome && inputs.absenceDays) {
+      courtLostWages = Math.round(inputs.dailyIncome * inputs.absenceDays);
     }
-
   } else if (inputs.status === "death") {
-    const lifeRate = resolveDeathLifeRate(inputs);
-    deathLifeRateUsed = lifeRate;
+    // 死亡慰謝料
     courtAfter = resolveDeathPain(inputs);
-    courtLost = calcDeathLostEarnings(inputs.annualIncome, lifeRate, inputs.deathWorkYears || 0);
+    const lifeRate = resolveDeathLifeRate(inputs);
+    const workYears = resolveDeathWorkYears(inputs);
+    // 死亡逸失利益：基礎収入×(1-生活費控除率)×係数
+    const netIncome = inputs.annualIncome * (1 - lifeRate);
+    courtLost = Math.round(netIncome * calcLumpSumFactor(workYears));
+    // 葬儀費
     courtOther += inputs.funeralCost || 0;
   }
 
   const courtTotal = courtInjury + courtAfter + courtLost + courtLostWages + courtOther;
   const courtAfterFault = applyFault(courtTotal, inputs.faultPercent);
   const courtAfterPaid = applyPaid(courtAfterFault, inputs.alreadyPaid);
+
+  // 自賠責基準（簡易）
+  let jibaiInjury = 0;
+  let jibaiAfter = 0;
+  let jibaiLostWages = 0;
+  let jibaiOther = inputs.otherCosts || 0;
+  let jibaiCap = null;
+
+  if (inputs.status === "injury" || inputs.status === "after") {
+    jibaiInjury = calcJibaiInjuryPain(inputs.treatmentDays, inputs.visitDays);
+    jibaiLostWages = Math.round(inputs.dailyIncome * (inputs.absenceDays || 0));
+    if (inputs.status === "after") {
+      jibaiAfter = calcJibaiAfterPain(inputs.grade);
+    }
+    jibaiCap = JIBAI_INJURY_CAP;
+  } else if (inputs.status === "death") {
+    // 死亡自賠責は「限度額」を目安的に使用
+    jibaiCap = JIBAI_DEATH_CAP;
+    jibaiInjury = 0;
+    jibaiAfter = JIBAI_DEATH_CAP;
+  }
+
+  let jibaiTotal = jibaiInjury + jibaiAfter + jibaiLostWages + jibaiOther;
+  if (jibaiCap != null) {
+    jibaiTotal = Math.min(jibaiTotal, jibaiCap);
+  }
+  const jibaiAfterFault = applyFault(jibaiTotal, inputs.faultPercent);
+  const jibaiAfterPaid = applyPaid(jibaiAfterFault, inputs.alreadyPaid);
+
+  // 構成比
   const courtRatios = buildRatio({
     injury: courtInjury,
     after: courtAfter,
     lost: courtLost,
     other: courtLostWages + courtOther
   });
-
-  let jibaiInjury = 0,
-      jibaiAfter = 0,
-      jibaiLostWages = 0,
-      jibaiOther = inputs.otherCosts || 0,
-      jibaiCap = null;
-
-  if (inputs.status === "injury" || inputs.status === "after") {
-    jibaiInjury = calcJibaiInjuryPain(inputs.treatmentDays, inputs.visitDays || 0);
-    jibaiLostWages = calcJibaiLostWages(inputs.dailyIncome || 0, inputs.absenceDays || 0);
-    if (inputs.status === "after") {
-      jibaiAfter = calcJibaiAfterPain(inputs.grade);
-    }
-    jibaiCap = JIBAI_INJURY_CAP;
-
-  } else if (inputs.status === "death") {
-    jibaiCap = JIBAI_DEATH_CAP;
-  }
-
-  const jibaiTotal = jibaiInjury + jibaiAfter + jibaiLostWages + jibaiOther;
-  const jibaiAfterFault = applyFault(jibaiTotal, inputs.faultPercent);
-  const jibaiAfterPaid = applyPaid(jibaiAfterFault, inputs.alreadyPaid);
 
   const result = {
     court: {
@@ -614,35 +470,256 @@ function calculateAll() {
       absenceDays: inputs.absenceDays,
       grade: inputs.grade,
       deathSupportType: inputs.deathSupportType,
-      deathWorkYears: inputs.deathWorkYears,
-      deathLifeRate: deathLifeRateUsed
-    }
+      deathWorkYears: resolveDeathWorkYears(inputs),
+      deathLifeRate: resolveDeathLifeRate(inputs)
+    },
+    inputs: inputs
   };
 
-  lastResult = { inputs, result };
+  lastResult = result;
   renderResult(result);
 
-  // 結果セクションへ自動スクロール
-  setTimeout(() => {
-    const target = document.getElementById("resultSection");
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
-    const y = rect.top + window.scrollY - 8; // 少し余白
-    window.scrollTo({
-      top: y,
-      behavior: "smooth"
-    });
-  }, 50);
+  // 結果カードまで自動スクロール
+  const target = getEl("resultSection");
+  if (target) {
+    setTimeout(() => {
+      const rect = target.getBoundingClientRect();
+      const y = rect.top + window.pageYOffset - 8;
+      window.scrollTo({
+        top: y,
+        behavior: "smooth"
+      });
+    }, 200);
+  }
+}
+
+// -----------------------
+// 構成比の計算
+// -----------------------
+function buildRatio(parts) {
+  const injury = parts.injury || 0;
+  const after = parts.after || 0;
+  const lost = parts.lost || 0;
+  const other = parts.other || 0;
+  const total = injury + after + lost + other;
+  if (!total) {
+    return {
+      injury: 0,
+      after: 0,
+      lost: 0,
+      other: 0
+    };
+  }
+  return {
+    injury: (injury / total) * 100,
+    after: (after / total) * 100,
+    lost: (lost / total) * 100,
+    other: (other / total) * 100
+  };
+}
+
+// ===============================
+// 結果の描画
+// ===============================
+function renderResult(all) {
+  const court = all.court;
+  const jibai = all.jibai;
+  const meta = all.meta;
+  const inputs = all.inputs;
+
+  // サマリー文言
+  const statusLabelMap = {
+    injury: "傷害（入通院）",
+    after: "後遺障害",
+    death: "死亡事故"
+  };
+  const statusLabel = statusLabelMap[meta.status] || "";
+
+  const caseSummaryEl = getEl("caseSummary");
+  if (caseSummaryEl) {
+    const agePart = meta.age ? `${meta.age}歳` : "";
+    const incomePart = meta.annualIncome
+      ? `年収 ${yenFormatter.format(meta.annualIncome)}`
+      : "";
+    const pieces = [];
+    if (statusLabel) pieces.push(statusLabel);
+    if (agePart) pieces.push(agePart);
+    if (incomePart) pieces.push(incomePart);
+    caseSummaryEl.textContent = pieces.join(" ／ ");
+  }
+
+  // 裁判所基準サマリー
+  const courtNetEl = getEl("courtNetAmount");
+  const courtHintEl = getEl("courtHint");
+  if (courtNetEl) {
+    courtNetEl.textContent = yenFormatter.format(court.afterPaid);
+  }
+  if (courtHintEl) {
+    courtHintEl.textContent =
+      `① 総損害額 ${yenFormatter.format(court.total)} ` +
+      `→ ② 過失相殺後 ${yenFormatter.format(court.afterFault)} ` +
+      `→ ③ 既払控除後（受取想定） ${yenFormatter.format(court.afterPaid)}`;
+  }
+
+  // 自賠責サマリー
+  const jibaiNetEl = getEl("jibaiNetAmount");
+  const jibaiHintEl = getEl("jibaiHint");
+  if (jibaiNetEl) {
+    jibaiNetEl.textContent = yenFormatter.format(jibai.afterPaid);
+  }
+  if (jibaiHintEl) {
+    let capInfo = "";
+    if (jibai.cap != null) {
+      capInfo = `（限度額 ${yenFormatter.format(jibai.cap)} を上限とするモデル）`;
+    }
+    jibaiHintEl.textContent =
+      `① 総損害額 ${yenFormatter.format(jibai.total)} ` +
+      `→ ② 過失相殺後 ${yenFormatter.format(jibai.afterFault)} ` +
+      `→ ③ 既払控除後（受取想定） ${yenFormatter.format(jibai.afterPaid)} ${capInfo}`;
+  }
+
+  // 明細（裁判所）
+  const setText = (id, value) => {
+    const el = getEl(id);
+    if (el) el.textContent = yenFormatter.format(value || 0);
+  };
+
+  setText("courtInjuryPain", court.injuryPain);
+  setText("courtAfterPain", court.afterPain);
+  setText("courtLostEarnings", court.lostEarnings);
+  setText("courtLostWages", court.lostWages);
+  setText("courtOtherCosts", court.otherCosts);
+  setText("courtTotal", court.total);
+  setText("courtAfterFault", court.afterFault);
+  setText("courtAfterPaid", court.afterPaid);
+
+  const ratio = court.ratios || { injury: 0, after: 0, lost: 0, other: 0 };
+  const setRatio = (id, v) => {
+    const el = getEl(id);
+    if (el) el.textContent = `${percentFormatter.format(v || 0)}％`;
+  };
+  setRatio("courtRatioInjury", ratio.injury);
+  setRatio("courtRatioAfter", ratio.after);
+  setRatio("courtRatioLostEarnings", ratio.lost);
+  setRatio("courtRatioOther", ratio.other);
+
+  // 明細（自賠責）
+  setText("jibaiInjuryPain", jibai.injuryPain);
+  setText("jibaiAfterPain", jibai.afterPain);
+  setText("jibaiLostWages", jibai.lostWages);
+  setText("jibaiOtherCosts", jibai.otherCosts);
+  setText("jibaiTotal", jibai.total);
+  setText("jibaiAfterFault", jibai.afterFault);
+  setText("jibaiAfterPaid", jibai.afterPaid);
+
+  const capInfoEl = getEl("jibaiCapInfo");
+  if (capInfoEl) {
+    if (jibai.cap != null) {
+      capInfoEl.textContent = `※自賠責限度額のモデル：${yenFormatter.format(
+        jibai.cap
+      )}（概算）`;
+    } else {
+      capInfoEl.textContent = "";
+    }
+  }
+
+  // グラフ
+  updateCourtChart(court);
+
+  // カード表示
+  const resultSection = getEl("resultSection");
+  const detailSection = getEl("detailResults");
+  if (resultSection) resultSection.classList.remove("hidden");
+  if (detailSection) detailSection.classList.remove("hidden");
+}
+
+// -----------------------
+// 円グラフ描画
+// -----------------------
+function updateCourtChart(court) {
+  const section = getEl("chartSection");
+  const canvas = getEl("courtChart");
+  const legend = getEl("chartLegend");
+  const note = getEl("chartNote");
+  if (!canvas || !legend || !section) return;
+
+  const injury = court.injuryPain || 0;
+  const after = court.afterPain || 0;
+  const lost = court.lostEarnings || 0;
+  const other = (court.lostWages || 0) + (court.otherCosts || 0);
+  const total = injury + after + lost + other;
+
+  if (!total) {
+    section.classList.add("hidden");
+    legend.innerHTML = "";
+    if (note) note.textContent = "裁判所基準の総損害額が0円のため表示しません。";
+    return;
+  }
+
+  section.classList.remove("hidden");
+
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const r = Math.min(w, h) / 2 - 10;
+
+  const parts = [
+    { label: "傷害慰謝料", value: injury, color: "#60a5fa" },
+    { label: "後遺/死亡慰謝料", value: after, color: "#f97373" },
+    { label: "逸失利益", value: lost, color: "#22c55e" },
+    { label: "その他", value: other, color: "#facc15" }
+  ].filter(p => p.value > 0);
+
+  let start = -Math.PI / 2;
+
+  parts.forEach(p => {
+    const angle = (p.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    start += angle;
+  });
+
+  legend.innerHTML = "";
+  parts.forEach(p => {
+    const pct = ((p.value / total) * 100).toFixed(1) + "%";
+    const item = document.createElement("div");
+    item.className = "chart-legend-item";
+
+    const box = document.createElement("span");
+    box.className = "chart-legend-color";
+    box.style.backgroundColor = p.color;
+
+    const label = document.createElement("span");
+    label.textContent = `${p.label}：${yenFormatter.format(p.value)}（${pct}）`;
+
+    item.appendChild(box);
+    item.appendChild(label);
+    legend.appendChild(item);
+  });
+
+  if (note) {
+    note.textContent = `総損害額 ${yenFormatter.format(
+      total
+    )} の構成比を表示しています。`;
+  }
 }
 
 // -----------------------
 // 事故類型で入力UI切替
 // -----------------------
 function updateInputVisibility() {
-  const v = document.getElementById("victimStatus").value;
-  const inj = document.getElementById("injuryInputs");
-  const aft = document.getElementById("afterInputs");
-  const dth = document.getElementById("deathInputs");
+  const v = getStringValue("victimStatus");
+  const inj = getEl("injuryInputs");
+  const aft = getEl("afterInputs");
+  const dth = getEl("deathInputs");
 
   if (inj) inj.classList.add("hidden");
   if (aft) aft.classList.add("hidden");
@@ -660,44 +737,42 @@ function updateInputVisibility() {
 // 典型モデル適用
 // -----------------------
 const modelPresets = {
-  "after_14_30": {
+  after_14_30: {
     status: "after",
     age: 30,
     annualIncome: 4000000,
     grade: "14"
   },
-  "after_12_40": {
+  after_12_40: {
     status: "after",
     age: 40,
     annualIncome: 5000000,
     grade: "12"
   },
-  "after_9_30": {
+  after_9_30: {
     status: "after",
     age: 30,
     annualIncome: 6000000,
     grade: "9"
   },
-  "after_12_30": {
+  after_12_30: {
     status: "after",
     age: 30,
     annualIncome: 4500000,
     grade: "12"
   },
-  "death_40_dep": {
+  death_40_dep: {
     status: "death",
     age: 40,
     annualIncome: 5000000,
     deathSupportType: "twoPlus",
-    deathWorkYears: 27,
     deathPainPreset: "dependent"
   },
-  "death_75_single": {
+  death_75_single: {
     status: "death",
     age: 75,
     annualIncome: 3000000,
     deathSupportType: "none",
-    deathWorkYears: 0,
     deathPainPreset: "self"
   }
 };
@@ -708,7 +783,7 @@ function applyModelPreset(key) {
 
   const setVal = (id, val) => {
     if (val === undefined) return;
-    const el = document.getElementById(id);
+    const el = getEl(id);
     if (el) el.value = val;
   };
 
@@ -721,26 +796,27 @@ function applyModelPreset(key) {
   setVal("annualIncome", preset.annualIncome);
   setVal("grade", preset.grade);
   setVal("deathSupportType", preset.deathSupportType);
-  setVal("deathWorkYears", preset.deathWorkYears);
   setVal("deathPainPreset", preset.deathPainPreset);
 }
 
 // -----------------------
-// 損害明細コピー機能
+// 損害明細コピー
 // -----------------------
 function buildSummaryTextFromLastResult() {
   if (!lastResult) return "";
 
-  const { inputs, result } = lastResult;
-  const court = result.court;
-  const jibai = result.jibai;
+  const all = lastResult;
+  const court = all.court;
+  const jibai = all.jibai;
+  const meta = all.meta;
+  const inputs = all.inputs;
 
   const statusLabelMap = {
     injury: "傷害（入通院）",
     after: "後遺障害",
     death: "死亡事故"
   };
-  const statusLabel = statusLabelMap[inputs.status] || "";
+  const statusLabel = statusLabelMap[meta.status] || "";
 
   const supportMap = {
     none: "被扶養者なし",
@@ -751,9 +827,9 @@ function buildSummaryTextFromLastResult() {
   const lines = [];
   lines.push("【交通事故損害概算（参考値・モデル計算）】");
   if (statusLabel) lines.push(`事故類型：${statusLabel}`);
-  if (inputs.age) lines.push(`年齢：${inputs.age}歳`);
-  if (inputs.annualIncome) {
-    lines.push(`基礎収入：${yenFormatter.format(inputs.annualIncome)}／年`);
+  if (meta.age) lines.push(`年齢：${meta.age}歳`);
+  if (meta.annualIncome) {
+    lines.push(`基礎収入：${yenFormatter.format(meta.annualIncome)}／年`);
   }
   if (inputs.accidentDate) {
     lines.push(`事故日：${inputs.accidentDate}`);
@@ -765,28 +841,31 @@ function buildSummaryTextFromLastResult() {
     lines.push(`既払金：${yenFormatter.format(inputs.alreadyPaid)}`);
   }
 
-  if (inputs.status === "injury" || inputs.status === "after") {
-    if (inputs.treatmentDays || inputs.visitDays || inputs.absenceDays) {
-      const t = inputs.treatmentDays ? `${inputs.treatmentDays}日` : "-";
-      const v = inputs.visitDays ? `${inputs.visitDays}日` : "-";
-      const a = inputs.absenceDays ? `${inputs.absenceDays}日` : "-";
+  if (meta.status === "injury" || meta.status === "after") {
+    if (meta.treatmentDays || meta.visitDays || meta.absenceDays) {
+      const t = meta.treatmentDays ? `${meta.treatmentDays}日` : "-";
+      const v = meta.visitDays ? `${meta.visitDays}日` : "-";
+      const a = meta.absenceDays ? `${meta.absenceDays}日` : "-";
       lines.push(`治療期間：${t}／実通院日数：${v}／休業日数：${a}`);
     }
-    if (inputs.status === "after" && inputs.grade && inputs.grade !== "none") {
-      lines.push(`後遺障害等級：${inputs.grade}級（慰謝料モデル＋逸失利益モデル）`);
+    if (meta.status === "after" && meta.grade && meta.grade !== "none") {
+      lines.push(`後遺障害等級：${meta.grade}級（慰謝料モデル＋逸失利益モデル）`);
     }
   }
 
-  if (inputs.status === "death") {
-    if (inputs.deathSupportType) {
-      lines.push(`扶養状況：${supportMap[inputs.deathSupportType] || ""}`);
+  if (meta.status === "death") {
+    if (meta.deathSupportType) {
+      lines.push(
+        `扶養状況：${supportMap[meta.deathSupportType] || ""}`
+      );
     }
-    if (inputs.deathWorkYears) {
-      lines.push(`就労可能年数（モデル）：約${inputs.deathWorkYears}年（67歳までを目安）`);
+    if (meta.deathWorkYears) {
+      lines.push(
+        `就労可能年数（モデル）：約${meta.deathWorkYears}年（67歳までを目安）`
+      );
     }
-    const lifeRate = result.meta && result.meta.deathLifeRate;
-    if (lifeRate != null) {
-      const pct = (lifeRate * 100).toFixed(1).replace(/\.0$/, "");
+    if (meta.deathLifeRate != null) {
+      const pct = (meta.deathLifeRate * 100).toFixed(1).replace(/\.0$/, "");
       lines.push(`生活費控除率（モデル）：約${pct}%`);
     }
     if (inputs.funeralCost) {
@@ -819,7 +898,9 @@ function buildSummaryTextFromLastResult() {
   lines.push(`既払控除後（受取想定）：${yenFormatter.format(jibai.afterPaid)}`);
 
   lines.push("");
-  lines.push("※本明細は公開されている目安額・モデル算式に基づく概算値であり、実際の解決額を保証するものではありません。");
+  lines.push(
+    "※本明細は公開されている目安額・モデル算式に基づく概算値であり、実際の解決額を保証するものではありません。"
+  );
 
   return lines.join("\n");
 }
@@ -829,7 +910,6 @@ function copySummaryToClipboard() {
     alert("先に「損害額を計算する」を実行してください。");
     return;
   }
-
   const text = buildSummaryTextFromLastResult();
   if (!text) {
     alert("コピー可能な明細がありません。");
@@ -848,12 +928,10 @@ function copySummaryToClipboard() {
     success = document.execCommand("copy");
     document.body.removeChild(textarea);
   } catch (e) {
-    console.error("copy execCommand error:", e);
     success = false;
   }
 
-  const statusEl = document.getElementById("copyStatus");
-
+  const statusEl = getEl("copyStatus");
   if (success) {
     if (statusEl) {
       statusEl.textContent = "損害明細をクリップボードにコピーしました。";
@@ -864,13 +942,10 @@ function copySummaryToClipboard() {
       alert("損害明細をコピーしました。");
     }
   } else {
-    window.prompt("コピーに失敗しました。下記テキストを選択してコピーしてください。", text);
-    if (statusEl) {
-      statusEl.textContent = "損害明細を表示しました（長押しでコピーできます）。";
-      setTimeout(() => {
-        statusEl.textContent = "";
-      }, 4000);
-    }
+    window.prompt(
+      "コピーに失敗しました。下記テキストを選択してコピーしてください。",
+      text
+    );
   }
 }
 
@@ -880,29 +955,31 @@ function copySummaryToClipboard() {
 document.addEventListener("DOMContentLoaded", () => {
   updateInputVisibility();
 
-  const statusSel = document.getElementById("victimStatus");
+  const statusSel = getEl("victimStatus");
   if (statusSel) {
     statusSel.addEventListener("change", updateInputVisibility);
   }
 
-  const calcBtn = document.getElementById("calcButton");
+  const calcBtn = getEl("calcButton");
   if (calcBtn) {
-    calcBtn.addEventListener("click", (e) => {
+    calcBtn.addEventListener("click", e => {
       e.preventDefault();
+      calcBtn.classList.add("btn-pressed");
+      setTimeout(() => calcBtn.classList.remove("btn-pressed"), 150);
       calculateAll();
     });
   }
 
-  const presetSelect = document.getElementById("modelPreset");
+  const presetSelect = getEl("modelPreset");
   if (presetSelect) {
-    presetSelect.addEventListener("change", (e) => {
+    presetSelect.addEventListener("change", e => {
       applyModelPreset(e.target.value);
     });
   }
 
-  const copyBtn = document.getElementById("copySummaryButton");
+  const copyBtn = getEl("copySummaryButton");
   if (copyBtn) {
-    copyBtn.addEventListener("click", (e) => {
+    copyBtn.addEventListener("click", e => {
       e.preventDefault();
       copySummaryToClipboard();
     });
