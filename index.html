@@ -21,11 +21,9 @@
     </div>
   </section>
 
-  <!-- 入力カード -->
+    <!-- 入力カード -->
   <section class="card" id="inputCard">
     <h2 class="card-title">入力</h2>
-
-    <div id="errorArea" class="error-area"></div>
 
     <label>事故類型を選択</label>
     <select id="victimStatus">
@@ -44,6 +42,24 @@
       <option value="death_40_dep">死亡・40代一家の支柱モデル</option>
       <option value="death_75_single">死亡・75歳・扶養なしモデル</option>
     </select>
+
+    <!-- 代表ケース：タップで入力＋即計算 -->
+    <div class="quick-preset-block">
+      <p class="muted small">
+        代表ケース（タップすると入力が自動設定され、そのまま計算します）
+      </p>
+      <div class="quick-preset-row">
+        <button type="button" class="chip-button" data-quick-preset="after_14_30">
+          むち打ち14級・30代・年収400万
+        </button>
+        <button type="button" class="chip-button" data-quick-preset="after_12_30">
+          12級・30代・年収450万
+        </button>
+        <button type="button" class="chip-button" data-quick-preset="death_40_dep">
+          死亡・30代一家の支柱・年収500万
+        </button>
+      </div>
+    </div>
 
     <label>事故日</label>
     <input type="date" id="accidentDate">
@@ -108,12 +124,12 @@
       </select>
 
       <label>生活費控除率（%）任意指定</label>
-      <input type="number" id="deathLifeRate" placeholder="空欄なら年齢＋扶養状況から自動">
+      <input type="number" id="deathLifeRate" placeholder="空欄なら年齢＋扶養状況＋収入から自動">
 
       <label>就労可能年数（年）</label>
       <input type="number" id="deathWorkYears" placeholder="空欄か0なら年齢から自動（67歳まで）">
 
-      <label>死亡慰謝料（モデル：裁判所基準）</label>
+      <label>死亡慰謝料（モデル）</label>
       <select id="deathPainPreset">
         <option value="">選択してください</option>
         <option value="self">本人のみモデル（約2,900万円）</option>
@@ -140,12 +156,13 @@
     <button id="calcButton">損害額を計算する</button>
   </section>
 
+
   <!-- 結果：サマリー -->
   <section id="resultSection" class="card hidden">
     <h2 class="card-title">結果（概算・参考値）</h2>
 
     <p id="caseSummary" class="muted" style="margin-top:4px;"></p>
-
+    <p id="interpretationMain" class="muted" style="margin-top:8px;"></p>
     <!-- 裁判所基準 -->
     <p class="sub" style="margin-top:12px;">裁判所基準（モデル・過失・既払控除後）</p>
     <div class="result-value" id="courtNetAmount">¥0</div>
