@@ -32,13 +32,15 @@
       <option value="death">死亡事故</option>
     </select>
 
-    <label>典型モデル（任意）</label>
+    <label>典型モデル（任意・ワンタップで入力補助）</label>
     <select id="modelPreset">
       <option value="">選択しない</option>
       <option value="after_14_30">後遺14級・30代・年収400万モデル</option>
       <option value="after_12_40">後遺12級・40代・年収500万モデル</option>
       <option value="after_9_30">後遺9級・30代・年収600万モデル</option>
+      <option value="after_12_30">後遺12級・30代・年収450万モデル</option>
       <option value="death_40_dep">死亡・40代一家の支柱モデル</option>
+      <option value="death_75_single">死亡・75歳・扶養なしモデル</option>
     </select>
 
     <label>事故日</label>
@@ -197,6 +199,11 @@
     <p id="jibaiCapInfo" class="muted"></p>
     <p>過失相殺後：<span id="jibaiAfterFault"></span></p>
     <p>既払控除後（受取想定）：<span id="jibaiAfterPaid"></span></p>
+
+    <hr style="margin-top:18px;margin-bottom:12px;">
+
+    <button id="copySummaryButton">損害明細をコピー（Word/Excel貼付用）</button>
+    <p id="copyStatus" class="muted"></p>
   </section>
 </div>
 
