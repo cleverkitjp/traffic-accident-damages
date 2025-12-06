@@ -25,6 +25,8 @@
   <section class="card" id="inputCard">
     <h2 class="card-title">入力</h2>
 
+    <div id="errorArea" class="error-area"></div>
+
     <label>事故類型を選択</label>
     <select id="victimStatus">
       <option value="injury">傷害（入通院中心）</option>
@@ -106,12 +108,12 @@
       </select>
 
       <label>生活費控除率（%）任意指定</label>
-      <input type="number" id="deathLifeRate" placeholder="空欄なら年齢＋扶養状況＋収入から自動">
+      <input type="number" id="deathLifeRate" placeholder="空欄なら年齢＋扶養状況から自動">
 
       <label>就労可能年数（年）</label>
       <input type="number" id="deathWorkYears" placeholder="空欄か0なら年齢から自動（67歳まで）">
 
-      <label>死亡慰謝料（モデル）</label>
+      <label>死亡慰謝料（モデル：裁判所基準）</label>
       <select id="deathPainPreset">
         <option value="">選択してください</option>
         <option value="self">本人のみモデル（約2,900万円）</option>
@@ -143,46 +145,29 @@
     <h2 class="card-title">結果（概算・参考値）</h2>
 
     <p id="caseSummary" class="muted" style="margin-top:4px;"></p>
-    <p id="deathModelNote" class="muted small-note"></p>
 
     <!-- 裁判所基準 -->
     <p class="sub" style="margin-top:12px;">裁判所基準（モデル・過失・既払控除後）</p>
     <div class="result-value" id="courtNetAmount">¥0</div>
 
-    <div class="result-steps">
-      <div class="result-step-row">
-        <span class="result-step-label">① 総損害額</span>
-        <span class="result-step-value" id="courtStepTotal">¥0</span>
-      </div>
-      <div class="result-step-row">
-        <span class="result-step-label">② 過失相殺後</span>
-        <span class="result-step-value" id="courtStepFault">¥0</span>
-      </div>
-      <div class="result-step-row">
-        <span class="result-step-label">③ 既払控除後</span>
-        <span class="result-step-value" id="courtStepPaid">¥0</span>
-      </div>
+    <div class="result-mini">
+      <div>① 総損害額：<span id="courtTotalMini">¥0</span></div>
+      <div>② 過失相殺後：<span id="courtAfterFaultMini">¥0</span></div>
+      <div>③ 既払控除後：<span id="courtAfterPaidMini">¥0</span></div>
     </div>
+
     <p id="courtHint" class="muted" style="margin-top:4px;"></p>
 
     <!-- 自賠責基準 -->
     <p class="sub" style="margin-top:16px;">自賠責基準（過失・既払控除後）</p>
     <div class="result-value" id="jibaiNetAmount">¥0</div>
 
-    <div class="result-steps">
-      <div class="result-step-row">
-        <span class="result-step-label">① 総損害額</span>
-        <span class="result-step-value" id="jibaiStepTotal">¥0</span>
-      </div>
-      <div class="result-step-row">
-        <span class="result-step-label">② 過失相殺後</span>
-        <span class="result-step-value" id="jibaiStepFault">¥0</span>
-      </div>
-      <div class="result-step-row">
-        <span class="result-step-label">③ 既払控除後</span>
-        <span class="result-step-value" id="jibaiStepPaid">¥0</span>
-      </div>
+    <div class="result-mini">
+      <div>① 総損害額：<span id="jibaiTotalMini">¥0</span></div>
+      <div>② 過失相殺後：<span id="jibaiAfterFaultMini">¥0</span></div>
+      <div>③ 既払控除後：<span id="jibaiAfterPaidMini">¥0</span></div>
     </div>
+
     <p id="jibaiHint" class="muted" style="margin-top:4px;"></p>
 
     <p class="muted" style="margin-top:10px;">
@@ -244,7 +229,6 @@
   </section>
 </div>
 
-<!-- バージョン付きでキャッシュ更新 -->
-<script src="script.js?v=20251206b"></script>
+<script src="script.js"></script>
 </body>
 </html>
