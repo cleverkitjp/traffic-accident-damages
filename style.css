@@ -175,3 +175,34 @@ button#copySummaryButton:active {
     font-size: 14px;
   }
 }
+/* 代表ケース用チップボタン */
+.quick-preset-block {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.quick-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.small {
+  font-size: 0.8rem;
+}
+
+.chip-button {
+  border: none;
+  border-radius: 9999px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  background: #e5edff;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.chip-button:active {
+  transform: translateY(1px);
+  opacity: 0.9;
+}
