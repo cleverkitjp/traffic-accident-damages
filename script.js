@@ -800,27 +800,121 @@ function copySummaryToClipboard() {
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(done).catch(() => {
-      fallbackCopy(text, done);
-    });
-  } else {
-    fallbackCopy(text, done);
+// -----------------------
+// 損害明細コピー機能
+// -----------------------
+function buildSummaryTextFromLastResult() {
+  if (!lastResult) return "";
+
+  const { inputs, result } = lastResult;
+  const court = result.court;
+  const jibai = result.jibai;
+
+  const statusLabelMap = {
+    injury: "傷害（入通院）",
+    after: "後遺障害",
+    death: "死亡事故"
+  };
+  const statusLabel = statusLabelMap[inputs.status] || "";
+
+  const lines = [];
+  lines.push("【交通事故損害概算（参考値・モデル計算）】");
+  if (statusLabel) lines.push(`事故類型：${statusLabel}`);
+  if (inputs.age) lines.push(`年齢：${inputs.age}歳`);
+  if (inputs.annualIncome) {
+    lines.push(`基礎収入：${yenFormatter.format(inputs.annualIncome)}／年`);
   }
+  if (inputs.accidentDate) {
+    lines.push(`事故日：${inputs.accidentDate}`);
+  }
+  if (inputs.faultPercent || inputs.faultPercent === 0) {
+    lines.push(`過失割合（被害者側）：${inputs.faultPercent}%`);
+  }
+  if (inputs.alreadyPaid) {
+    lines.push(`既払金：${yenFormatter.format(inputs.alreadyPaid)}`);
+  }
+
+  lines.push("");
+  lines.push("＜裁判所基準モデル＞");
+  lines.push(`傷害慰謝料：${yenFormatter.format(court.injuryPain)}`);
+  lines.push(`後遺障害／死亡慰謝料：${yenFormatter.format(court.afterPain)}`);
+  lines.push(`逸失利益：${yenFormatter.format(court.lostEarnings)}`);
+  lines.push(`休業損害：${yenFormatter.format(court.lostWages)}`);
+  lines.push(`その他費用：${yenFormatter.format(court.otherCosts)}`);
+  lines.push(`総損害額：${yenFormatter.format(court.total)}`);
+  lines.push(`過失相殺後：${yenFormatter.format(court.afterFault)}`);
+  lines.push(`既払控除後（受取想定）：${yenFormatter.format(court.afterPaid)}`);
+
+  lines.push("");
+  lines.push("＜自賠責基準モデル＞");
+  lines.push(`傷害慰謝料：${yenFormatter.format(jibai.injuryPain)}`);
+  lines.push(`後遺障害慰謝料：${yenFormatter.format(jibai.afterPain)}`);
+  lines.push(`休業損害：${yenFormatter.format(jibai.lostWages)}`);
+  lines.push(`その他費用：${yenFormatter.format(jibai.otherCosts)}`);
+  lines.push(`総損害額：${yenFormatter.format(jibai.total)}`);
+  if (jibai.cap) {
+    lines.push(`自賠責限度額：${yenFormatter.format(jibai.cap)}`);
+  }
+  lines.push(`過失相殺後：${yenFormatter.format(jibai.afterFault)}`);
+  lines.push(`既払控除後（受取想定）：${yenFormatter.format(jibai.afterPaid)}`);
+
+  lines.push("");
+  lines.push("※本明細は公開されている目安額・モデル算式に基づく概算値であり、実際の解決額を保証するものではありません。");
+
+  return lines.join("\n");
 }
 
-function fallbackCopy(text, callback) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand("copy");
-  } catch (e) {
-    console.error(e);
+function copySummaryToClipboard() {
+  if (!lastResult) {
+    alert("先に「損害額を計算する」を実行してください。");
+    return;
   }
-  document.body.removeChild(textarea);
-  if (typeof callback === "function") callback();
+
+  const text = buildSummaryTextFromLastResult();
+  if (!text) {
+    alert("コピー可能な明細がありません。");
+    return;
+  }
+
+  // まずは execCommand を使った従来型コピーを試みる
+  let success = false;
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    success = document.execCommand("copy");
+    document.body.removeChild(textarea);
+  } catch (e) {
+    console.error("copy execCommand error:", e);
+    success = false;
+  }
+
+  const statusEl = document.getElementById("copyStatus");
+
+  if (success) {
+    if (statusEl) {
+      statusEl.textContent = "損害明細をクリップボードにコピーしました。";
+      setTimeout(() => {
+        statusEl.textContent = "";
+      }, 4000);
+    } else {
+      alert("損害明細をコピーしました。");
+    }
+  } else {
+    // コピーに失敗した場合でも、テキストをユーザーに提示して手動コピー可能にする
+    window.prompt("コピーに失敗しました。下記テキストを選択してコピーしてください。", text);
+    if (statusEl) {
+      statusEl.textContent = "損害明細を表示しました（長押しでコピーできます）。";
+      setTimeout(() => {
+        statusEl.textContent = "";
+      }, 4000);
+    }
+  }
+}
 }
 
 // -----------------------
