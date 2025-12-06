@@ -473,8 +473,13 @@ function renderResult(result) {
 function calculateAll() {
   const inputs = collectInputs();
   const errors = validateInputs(inputs);
-  showErrors(errors);
-  if (errors.length) return;
+  if (errors.length > 0) {
+    showErrors(errors);
+    // エラー時は解説コメントをクリア
+    const interp = document.getElementById("interpretationMain");
+    if (interp) interp.textContent = "";
+    return;
+  }
 
   // 死亡事故の補正
   if (inputs.status === "death") {
@@ -578,6 +583,8 @@ function calculateAll() {
 
   lastResult = { inputs, result };
   renderResult(result);
+  // ★ 解説コメント更新
+  updateInterpretationFromLastResult();
 }
 
 // 入力UI切り替え
@@ -641,6 +648,66 @@ function applyModelPreset(key) {
   setVal("grade", preset.grade);
   setVal("deathSupportType", preset.deathSupportType);
   setVal("deathPainPreset", preset.deathPainPreset);
+}
+// -----------------------
+// 結果の簡易解説コメント
+// -----------------------
+function updateInterpretationFromLastResult() {
+  const el = document.getElementById("interpretationMain");
+  if (!el) return;
+
+  if (!lastResult) {
+    el.textContent = "";
+    return;
+  }
+
+  const { inputs, result } = lastResult;
+  const court = result.court || {};
+  const jibai = result.jibai || {};
+
+  const statusLabelMap = {
+    injury: "傷害（入通院）",
+    after: "後遺障害",
+    death: "死亡事故"
+  };
+  const statusLabel = statusLabelMap[inputs.status] || "";
+
+  const parts = [];
+
+  if (statusLabel) {
+    parts.push(`${statusLabel}についての簡易モデル計算結果です。`);
+  }
+
+  if (inputs.status === "after") {
+    if (inputs.grade && inputs.grade !== "none") {
+      parts.push(`後遺障害${inputs.grade}級について、赤本等で示される典型的な慰謝料水準と、基礎収入・年齢に応じた逸失利益モデルを用いて裁判所基準を概算しています。`);
+    } else {
+      parts.push("後遺障害の等級が未指定のため、慰謝料・逸失利益のモデルは簡略化されています。");
+    }
+  } else if (inputs.status === "death") {
+    parts.push("死亡事故について、年収と扶養状況から就労可能年数と生活費控除率を仮定し、死亡慰謝料モデルと逸失利益を合算した裁判所基準モデルです。");
+  } else if (inputs.status === "injury") {
+    parts.push("入通院慰謝料と休業損害を中心に、治療期間・通院日数から裁判所基準モデルを簡易算定しています。");
+  }
+
+  if (court.total && jibai.total) {
+    if (jibai.total > 0) {
+      const ratio = court.total / jibai.total;
+      if (ratio >= 1.5 && ratio <= 5) {
+        parts.push(`裁判所基準の総損害額は、自賠責基準の約${ratio.toFixed(1)}倍となっています。慰謝料水準や逸失利益の扱いの違いによる差です。`);
+      } else if (ratio > 5) {
+        parts.push("裁判所基準の総損害額は、自賠責基準と比べてかなり高めに算定されています。自賠責は最低限の補償水準であるため、このような差が生じます。");
+      } else if (ratio < 1) {
+        parts.push("このケースでは、自賠責基準の方が相対的に大きな金額となっています。限度額や算定方式の違いによるものです。");
+      }
+    } else {
+      parts.push("自賠責基準側の金額は、このモデルでは0に近い値となっています（限度額や対象項目の違いによるものです）。");
+    }
+  }
+
+  parts.push("実際の解決額は、赤本の具体的記載や個別事情により増減しうるため、あくまで目安としてご利用ください。");
+
+  el.textContent = parts.join(" ");
 }
 
 // 損害明細コピー
@@ -766,25 +833,46 @@ function copySummaryToClipboard() {
   }
 }
 
+// -----------------------
 // 初期化
+// -----------------------
 document.addEventListener("DOMContentLoaded", () => {
   updateInputVisibility();
 
-  document.getElementById("victimStatus")
-    .addEventListener("change", updateInputVisibility);
+  const statusSelect = document.getElementById("victimStatus");
+  if (statusSelect) {
+    statusSelect.addEventListener("change", updateInputVisibility);
+  }
 
-  document.getElementById("calcButton")
-    .addEventListener("click", (e) => {
+  const calcBtn = document.getElementById("calcButton");
+  if (calcBtn) {
+    calcBtn.addEventListener("click", (e) => {
       e.preventDefault();
       calculateAll();
     });
+  }
 
   const presetSelect = document.getElementById("modelPreset");
   if (presetSelect) {
     presetSelect.addEventListener("change", (e) => {
-      applyModelPreset(e.target.value);
+      const key = e.target.value;
+      if (!key) return;
+      applyModelPreset(key);
     });
   }
+
+  // ★ 代表ケース用ワンタップボタン
+  const quickButtons = document.querySelectorAll("[data-quick-preset]");
+  quickButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const key = btn.getAttribute("data-quick-preset");
+      if (!key) return;
+      applyModelPreset(key);
+      // 入力が埋まったら即計算
+      calculateAll();
+    });
+  });
 
   const copyBtn = document.getElementById("copySummaryButton");
   if (copyBtn) {
@@ -794,3 +882,4 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
