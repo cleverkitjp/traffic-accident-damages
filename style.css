@@ -192,17 +192,25 @@ button#copySummaryButton:active {
   font-size: 0.8rem;
 }
 
+/* 代表ケースボタン（控えめデザインで再定義） */
 .chip-button {
   border: none;
   border-radius: 9999px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   font-size: 0.8rem;
-  background: #e5edff;
+  background: #eef3ff;     /* やわらかい薄ブルー */
   color: #1d4ed8;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);  /* 影を極小に */
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.chip-button:hover {
+  background: #e1e9ff;
 }
 
 .chip-button:active {
   transform: translateY(1px);
-  opacity: 0.9;
+  box-shadow: none;
 }
+
