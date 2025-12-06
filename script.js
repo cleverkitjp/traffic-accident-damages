@@ -402,8 +402,10 @@ function calculateAll() {
   const courtTotal = courtInjury + courtAfter + courtLost + courtLostWages + courtOther;
   const courtAfterFault = applyFault(courtTotal, inputs.faultPercent);
   const courtAfterPaid = applyPaid(courtAfterFault, inputs.alreadyPaid);
-
-  // 自賠責基準（簡易）
+  
+  // ===============================
+  // 自賠責基準（モデル）
+  // ===============================
   let jibaiInjury = 0;
   let jibaiAfter = 0;
   let jibaiLostWages = 0;
@@ -411,19 +413,37 @@ function calculateAll() {
   let jibaiCap = null;
 
   if (inputs.status === "injury" || inputs.status === "after") {
+
+    // 傷害の自賠責慰謝料
     jibaiInjury = calcJibaiInjuryPain(inputs.treatmentDays, inputs.visitDays);
+
+    // 休業損害
     jibaiLostWages = Math.round(inputs.dailyIncome * (inputs.absenceDays || 0));
+
+    // 後遺障害の自賠責慰謝料
     if (inputs.status === "after") {
       jibaiAfter = calcJibaiAfterPain(inputs.grade);
     }
+
     jibaiCap = JIBAI_INJURY_CAP;
+
   } else if (inputs.status === "death") {
-    // 死亡自賠責は「限度額」を目安的に使用
-    jibaiCap = JIBAI_DEATH_CAP;
+
+    // ---- 死亡自賠責モデル（固定 350万円） ----
+    // ※必要なら後で区分（支柱・扶養あり等）を追加可能
+    jibaiAfter = 3500000;
+
+    // 傷害慰謝料は 0（死亡のみと扱う）
     jibaiInjury = 0;
-    jibaiAfter = JIBAI_DEATH_CAP;
+
+    // 葬儀費をここでも加算（モデル）
+    jibaiOther += inputs.funeralCost || 0;
+
+    // 限度額：死亡自賠責（3,000万円）
+    jibaiCap = JIBAI_DEATH_CAP;
   }
 
+  // 上限適用＋過失・既払処理
   let jibaiTotal = jibaiInjury + jibaiAfter + jibaiLostWages + jibaiOther;
   if (jibaiCap != null) {
     jibaiTotal = Math.min(jibaiTotal, jibaiCap);
