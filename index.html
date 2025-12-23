@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>交通事故損害賠償オールインワン電卓</title>
+  <link rel="stylesheet" href="https://cleverkitjp.github.io/common.css">
   <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-F6517NYNFF"></script>
 <script>
@@ -223,11 +224,21 @@
     <p id="copyStatus" class="muted"></p>
   </section>
 </div>
-<footer>
-  <p class="back-to-top">
-  <a href="https://cleverkitjp.github.io/">cleverkitjp トップページへ戻る</a>
-</p>
-</footer>
 <script src="script.js"></script>
+<div id="ck-footer-container"></div>
+<script>
+  (function() {
+    var container = document.getElementById('ck-footer-container');
+    if (!container) return;
+
+    fetch('https://cleverkitjp.github.io/footer.html')
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        container.innerHTML = html;
+        try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+      })
+      .catch(function(e) {});
+  })();
+</script>
 </body>
 </html>
